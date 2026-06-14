@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Organizer Dashboard — RonsTeeBallers</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f4f8;
+      color: #1a2332;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #1a5276;
+      color: white;
+      padding: 20px 16px 16px;
+      text-align: center;
+    }
+    .header .logo { font-size: 28px; margin-bottom: 4px; }
+    .header h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+    .header p { font-size: 13px; opacity: 0.8; }
+
+    .section-label {
+      font-size: 12px;
+      font-weight: 700;
+      color: #5d6d7e;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin: 20px 16px 8px;
+    }
+
+    .card {
+      background: white;
+      margin: 0 16px 12px;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .event-card {
+      background: white;
+      margin: 0 16px 12px;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      border-left: 4px solid #1a5276;
+    }
+
+    .event-card.oversubscribed { border-left-color: #922b21; }
+    .event-card.full { border-left-color: #1e8449; }
+
+    .event-venue { font-size: 17px; font-weight: 700; color: #1a2332; margin-bottom: 4px; }
+    .event-date { font-size: 14px; color: #5d6d7e; margin-bottom: 10px; }
+
+    .event-stats { display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+
+    .stat-pill {
+      font-size: 13px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: #eaf2ff;
+      color: #1a5276;
+    }
+    .stat-pill.warning { background: #fdf2f2; color: #922b21; }
+    .stat-pill.success { background: #eafaf1; color: #1e8449; }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: #eaf2ff;
+      border-radius: 3px;
+      margin-bottom: 14px;
+      overflow: hidden;
+    }
+    .progress-fill { height: 100%; background: #1a5276; border-radius: 3px; }
+    .progress-fill.full { background: #1e8449; }
+    .progress-fill.over { background: #922b21; }
+
+    .event-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    .btn {
+      flex: 1;
+      min-width: 100px;
+      padding: 12px 8px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      border: none;
+      transition: all 0.15s;
+    }
+    .btn:active { transform: scale(0.97); }
+    .btn-primary { background: #1a5276; color: white; }
+    .btn-primary:active { background: #154360; }
+    .btn-secondary { background: white; color: #1a5276; border: 2px solid #1a5276; }
+    .btn-secondary:active { background: #eaf2ff; }
+    .btn-success { background: #1e8449; color: white; }
+    .btn-success:active { background: #196f3d; }
+
+    .btn-full {
+      display: block;
+      width: calc(100% - 32px);
+      margin: 0 16px 12px;
+      padding: 16px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      border: none;
+      transition: all 0.15s;
+      background: #1a5276;
+      color: white;
+    }
+    .btn-full:active { background: #154360; }
+
+    .tools-card {
+      background: white;
+      margin: 0 16px 12px;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+    }
+
+    .tool-btn {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      background: white;
+      border: none;
+      width: 100%;
+      text-align: left;
+      font-size: 15px;
+      font-weight: 600;
+      color: #1a2332;
+      cursor: pointer;
+      border-bottom: 1px solid #f0f4f8;
+    }
+    .tool-btn:last-child { border-bottom: none; }
+    .tool-btn:active { background: #eaf2ff; }
+    .tool-btn .icon { font-size: 20px; width: 28px; text-align: center; }
+    .tool-btn .arrow { margin-left: auto; color: #aab7c4; font-size: 18px; }
+
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #5d6d7e;
+      font-size: 16px;
+    }
+    .spinner {
+      width: 36px;
+      height: 36px;
+      border: 4px solid #eaf2ff;
+      border-top-color: #1a5276;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .empty-events { text-align: center; padding: 30px 20px; color: #5d6d7e; }
+    .empty-events .icon { font-size: 40px; margin-bottom: 10px; }
+    .empty-events p { font-size: 15px; }
+
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: #1a2332;
+      color: white;
+      padding: 12px 24px;
+      border-radius: 24px;
+      font-size: 14px;
+      font-weight: 600;
+      opacity: 0;
+      transition: opacity 0.3s;
+      z-index: 1000;
+      white-space: nowrap;
+    }
+    .toast.show { opacity: 1; }
+
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 100;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+
+    .modal {
+      background: white;
+      border-radius: 20px 20px 0 0;
+      padding: 24px 16px;
+      width: 100%;
+      max-width: 600px;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .modal h2 { font-size: 20px; font-weight: 700; color: #1a5276; margin-bottom: 20px; text-align: center; }
+
+    .form-group { margin-bottom: 16px; }
+    .form-label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #5d6d7e;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+      display: block;
+    }
+    .form-input {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid #d0d8e4;
+      border-radius: 10px;
+      font-size: 16px;
+      font-family: inherit;
+      color: #1a2332;
+      transition: border-color 0.15s;
+    }
+    .form-input:focus { outline: none; border-color: #1a5276; }
+
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .modal-actions .btn { flex: 1; padding: 16px; font-size: 16px; }
+
+    .bottom-spacer { height: 24px; }
+  </style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">⛳</div>
+  <h1>RonsTeeBallers</h1>
+  <p>Organizer Dashboard</p>
+</div>
+
+<div id="loading" class="loading" style="margin:16px;">
+  <div class="spinner"></div>
+  Loading...
+</div>
+
+<div id="app" style="display:none;">
+
+  <div class="section-label">Open Events</div>
+  <div id="events-container"></div>
+
+  <button class="btn-full" onclick="showCreateEvent()">+ Create New Event</button>
+
+  <div class="section-label">Tools</div>
+  <div class="tools-card">
+    <button class="tool-btn" onclick="runTool('syncForms')">
+      <span class="icon">🔄</span>
+      <span>Sync Player Names to Forms</span>
+      <span class="arrow">›</span>
+    </button>
+    <button class="tool-btn" onclick="runTool('syncContacts')">
+      <span class="icon">📋</span>
+      <span>Sync Contact Groups</span>
+      <span class="arrow">›</span>
+    </button>
+    <button class="tool-btn" onclick="window.location.href='signup.html?event=' + currentEventId">
+      <span class="icon">👥</span>
+      <span>View Current Signup List</span>
+      <span class="arrow">›</span>
+    </button>
+  </div>
+
+  <div class="bottom-spacer"></div>
+</div>
+
+<!-- Create Event Modal -->
+<div class="modal-overlay" id="create-modal">
+  <div class="modal">
+    <h2>Create New Event</h2>
+
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-input" id="new-date">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Venue</label>
+      <select class="form-input" id="new-venue">
+        <option value="">Select venue...</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Starting Time</label>
+      <input type="time" class="form-input" id="new-time">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Tee Times Reserved</label>
+      <input type="number" class="form-input" id="new-slots" min="1" max="20" placeholder="e.g. 5">
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Mailing List</label>
+      <select class="form-input" id="new-mailing-list">
+        <option value="Main Group">Main Group (~63 players)</option>
+        <option value="Monday">Monday Golf Group</option>
+        <option value="Indoor">Indoor Golf Group</option>
+        <option value="Monday and Indoor">Monday and Indoor</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Notes (optional)</label>
+      <input type="text" class="form-input" id="new-notes"
+        placeholder="Any special notes for this event...">
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideCreateEvent()">Cancel</button>
+      <button class="btn btn-primary" onclick="createEvent()">Create Event</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<script>
+  var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwt0YYfErXd7Rklo4-uAMSpJvOWbjNMUXDGmAI9COwgunFUD9XOXvI1kkB2VJf_xgA1/exec';
+  var currentEventId = '';
+
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var months = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+    var d = new Date(dateStr + 'T12:00:00');
+    return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function() { t.classList.remove('show'); }, 3000);
+  }
+
+  function jsonpCall(action, params, callback) {
+    var fnName = 'handle_' + action.replace(/[^a-z]/gi,'_') + '_' + Date.now();
+    window[fnName] = function(data) { callback(data); };
+
+    var url = BACKEND_URL + '?action=' + action + '&callback=' + fnName;
+    if (params) {
+      for (var key in params) {
+        url += '&' + key + '=' + encodeURIComponent(params[key]);
+      }
+    }
+
+    var script = document.createElement('script');
+    script.src = url;
+    document.body.appendChild(script);
+  }
+
+  function loadEvents() {
+    jsonpCall('getOpenEvents', {}, function(data) {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+
+      var container = document.getElementById('events-container');
+
+      if (!data.events || data.events.length === 0) {
+        container.innerHTML = '<div class="empty-events"><div class="icon">📅</div><p>No open events.<br>Create one to get started.</p></div>';
+        return;
+      }
+
+      var html = '';
+      data.events.forEach(function(event) {
+        var pct = event.totalSlots > 0 ? Math.min((event.confirmed / event.totalSlots) * 100, 100) : 0;
+        var isOver = event.confirmed > event.totalSlots;
+        var isFull = event.confirmed === event.totalSlots;
+        var cardClass = isOver ? 'event-card oversubscribed' : isFull ? 'event-card full' : 'event-card';
+        var pillClass = isOver ? 'stat-pill warning' : isFull ? 'stat-pill success' : 'stat-pill';
+        var fillClass = isOver ? 'progress-fill over' : isFull ? 'progress-fill full' : 'progress-fill';
+
+        if (currentEventId === '') currentEventId = event.id;
+
+        html += '<div class="' + cardClass + '">';
+        html += '<div class="event-venue">' + event.venue + '</div>';
+        html += '<div class="event-date">' + formatDate(event.date) + ' &bull; ' + event.time + '</div>';
+        html += '<div class="event-stats">';
+        html += '<span class="' + pillClass + '">' + event.confirmed + ' of ' + event.totalSlots + ' confirmed</span>';
+        if (isOver) html += '<span class="stat-pill warning">Oversubscribed</span>';
+        html += '</div>';
+        html += '<div class="progress-bar"><div class="' + fillClass + '" style="width:' + pct + '%"></div></div>';
+        html += '<div class="event-actions">';
+        html += '<button class="btn btn-secondary" onclick="viewPlayers(\'' + event.id + '\')">Players</button>';
+        html += '<button class="btn btn-primary" onclick="goToPairing(\'' + event.id + '\')">Pair</button>';
+        html += '<button class="btn btn-success" onclick="sendPairings(\'' + event.id + '\')">Send</button>';
+        html += '</div>';
+        html += '</div>';
+      });
+
+      container.innerHTML = html;
+    });
+  }
+function viewPlayers(eventId) {
+    window.location.href = 'signup.html?event=' + eventId;
+  }
+
+  function goToPairing(eventId) {
+    window.location.href = 'pairing.html?event=' + eventId;
+  }
+
+  function sendPairings(eventId) {
+    showToast('Pairings email coming soon...');
+  }
+
+  function showCreateEvent() {
+    loadVenues();
+    document.getElementById('create-modal').classList.add('show');
+  }
+
+  function hideCreateEvent() {
+    document.getElementById('create-modal').classList.remove('show');
+  }
+
+  function loadVenues() {
+    jsonpCall('getVenues', {}, function(data) {
+      var select = document.getElementById('new-venue');
+      select.innerHTML = '<option value="">Select venue...</option>';
+      if (data.venues) {
+        data.venues.forEach(function(venue) {
+          var opt = document.createElement('option');
+          opt.value = venue;
+          opt.textContent = venue;
+          select.appendChild(opt);
+        });
+      }
+    });
+  }
+
+  function createEvent() {
+    var date = document.getElementById('new-date').value;
+    var venue = document.getElementById('new-venue').value;
+    var time = document.getElementById('new-time').value;
+    var slots = document.getElementById('new-slots').value;
+    var mailingList = document.getElementById('new-mailing-list').value;
+    var notes = document.getElementById('new-notes').value;
+
+    if (!date || !venue || !time || !slots) {
+      showToast('Please fill in all required fields');
+      return;
+    }
+
+    jsonpCall('createEvent', {
+      date: date,
+      venue: venue,
+      time: time,
+      slots: slots,
+      mailingList: mailingList,
+      notes: notes
+    }, function(data) {
+      if (data.success) {
+        hideCreateEvent();
+        showToast('Event created!');
+        loadEvents();
+      } else {
+        showToast('Error: ' + (data.error || 'Unknown error'));
+      }
+    });
+  }
+
+  function runTool(tool) {
+    showToast('Running ' + tool + '...');
+    jsonpCall(tool, {}, function(data) {
+      if (data.success) {
+        showToast(data.message || 'Done!');
+      } else {
+        showToast('Error: ' + (data.error || 'Unknown error'));
+      }
+    });
+  }
+
+  loadEvents();
+</script>
+</body>
+</html>
