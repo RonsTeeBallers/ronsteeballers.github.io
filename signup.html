@@ -32,23 +32,9 @@
       box-shadow: 0 2px 8px rgba(0,0,0,0.08);
     }
 
-    .slot-count {
-      text-align: center;
-      margin-bottom: 16px;
-    }
-
-    .slot-number {
-      font-size: 36px;
-      font-weight: 700;
-      color: #1a5276;
-      line-height: 1;
-    }
-
-    .slot-label {
-      font-size: 14px;
-      color: #5d6d7e;
-      margin-top: 4px;
-    }
+    .slot-count { text-align: center; margin-bottom: 16px; }
+    .slot-number { font-size: 36px; font-weight: 700; color: #1a5276; line-height: 1; }
+    .slot-label { font-size: 14px; color: #5d6d7e; margin-top: 4px; }
 
     .progress-bar {
       width: 100%;
@@ -58,14 +44,12 @@
       margin: 12px 0;
       overflow: hidden;
     }
-
     .progress-fill {
       height: 100%;
       background: #1a5276;
       border-radius: 6px;
       transition: width 0.5s ease;
     }
-
     .progress-fill.full { background: #1e8449; }
     .progress-fill.over { background: #922b21; }
 
@@ -90,9 +74,7 @@
       margin-bottom: 12px;
     }
 
-    .player-list {
-      list-style: none;
-    }
+    .player-list { list-style: none; }
 
     .player-item {
       display: flex;
@@ -100,7 +82,6 @@
       padding: 12px 0;
       border-bottom: 1px solid #f0f4f8;
     }
-
     .player-item:last-child { border-bottom: none; }
 
     .player-number {
@@ -119,33 +100,15 @@
     }
 
     .player-info { flex: 1; }
+    .player-name { font-size: 16px; font-weight: 600; color: #1a2332; margin-bottom: 3px; }
+    .player-tags { display: flex; gap: 6px; flex-wrap: wrap; }
 
-    .player-name {
-      font-size: 16px;
-      font-weight: 600;
-      color: #1a2332;
-      margin-bottom: 3px;
-    }
-
-    .player-tags {
-      display: flex;
-      gap: 6px;
-      flex-wrap: wrap;
-    }
-
-    .tag {
-      font-size: 11px;
-      font-weight: 600;
-      padding: 2px 8px;
-      border-radius: 20px;
-    }
-
+    .tag { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
     .tag-walk { background: #eaf2ff; color: #1a5276; }
     .tag-ride { background: #fef9e7; color: #d68910; }
     .tag-nopref { background: #f2f3f4; color: #5d6d7e; }
     .tag-scramble { background: #eafaf1; color: #1e8449; }
     .tag-ownball { background: #eaf2ff; color: #1a5276; }
-    .tag-noscoring { background: #f2f3f4; color: #5d6d7e; }
 
     .loading {
       text-align: center;
@@ -153,7 +116,6 @@
       color: #5d6d7e;
       font-size: 16px;
     }
-
     .spinner {
       width: 40px;
       height: 40px;
@@ -163,15 +125,9 @@
       animation: spin 0.8s linear infinite;
       margin: 0 auto 16px;
     }
-
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    .empty-state {
-      text-align: center;
-      padding: 40px 20px;
-      color: #5d6d7e;
-    }
-
+    .empty-state { text-align: center; padding: 40px 20px; color: #5d6d7e; }
     .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
     .empty-state p { font-size: 16px; }
 
@@ -189,7 +145,6 @@
       cursor: pointer;
       text-align: center;
     }
-
     .refresh-btn:active { background: #eaf2ff; }
 
     .last-updated {
@@ -207,22 +162,14 @@
       padding-top: 12px;
       border-top: 1px solid #f0f4f8;
     }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 11px;
-      color: #5d6d7e;
-    }
+    .legend-item { display: flex; align-items: center; gap: 4px; font-size: 11px; color: #5d6d7e; }
   </style>
 </head>
 <body>
-
-<div class="header">
+  <div class="header">
   <div class="logo">⛳</div>
   <h1>RonsTeeBallers</h1>
-  <p id="header-subtitle">Who's Playing</p>
+  <p>Who's Playing</p>
 </div>
 
 <div id="loading" class="card loading" style="margin:16px;">
@@ -232,25 +179,24 @@
 
 <div id="app" style="display:none;">
 
-  <!-- Slot Count Card -->
   <div class="card">
     <div class="slot-count">
-      <div class="slot-number"><span id="confirmed-count">0</span> of <span id="slot-total">0</span></div>
+      <div class="slot-number">
+        <span id="confirmed-count">0</span> of <span id="slot-total">0</span>
+      </div>
       <div class="slot-label">slots filled</div>
     </div>
     <div class="progress-bar">
       <div class="progress-fill" id="progress-fill"></div>
     </div>
     <div id="oversubscribed-msg" class="oversubscribed" style="display:none;">
-      ⚠️ Event is full — contact Ron if you'd like to be added to the waitlist
+      Event is full — contact Ron if you would like to be added to the waitlist
     </div>
   </div>
 
-  <!-- Player List Card -->
   <div class="card">
     <div class="section-title">Confirmed Players</div>
-    <ul class="player-list" id="player-list">
-    </ul>
+    <ul class="player-list" id="player-list"></ul>
     <div id="empty-state" class="empty-state" style="display:none;">
       <div class="icon">🏌️</div>
       <p>No one has signed up yet.<br>Be the first!</p>
@@ -263,22 +209,21 @@
     </div>
   </div>
 
-  <button class="refresh-btn" onclick="loadPlayers()">↻ Refresh List</button>
+  <button class="refresh-btn" onclick="loadPlayers()">Refresh List</button>
   <div class="last-updated" id="last-updated"></div>
 
 </div>
-
 <script>
-  const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwt0YYfErXd7Rklo4-uAMSpJvOWbjNMUXDGmAI9COwgunFUD9XOXvI1kkB2VJf_xgA1/exec';
+  var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbwt0YYfErXd7Rklo4-uAMSpJvOWbjNMUXDGmAI9COwgunFUD9XOXvI1kkB2VJf_xgA1/exec';
 
   function getParams() {
-    const params = new URLSearchParams(window.location.search);
+    var params = new URLSearchParams(window.location.search);
     return { event: params.get('event') || '' };
   }
 
   function getWalkRideTag(walkRide) {
     if (!walkRide) return '';
-    const val = walkRide.toLowerCase();
+    var val = walkRide.toLowerCase();
     if (val === 'walk') return '<span class="tag tag-walk">Walk</span>';
     if (val === 'ride') return '<span class="tag tag-ride">Ride</span>';
     return '<span class="tag tag-nopref">Either</span>';
@@ -286,16 +231,21 @@
 
   function getScoringTag(scoring) {
     if (!scoring) return '';
-    const val = scoring.toLowerCase();
+    var val = scoring.toLowerCase();
     if (val === 'scramble') return '<span class="tag tag-scramble">Scramble</span>';
     if (val === 'own ball') return '<span class="tag tag-ownball">Own Ball</span>';
     return '';
   }
 
   function loadPlayers() {
-    const { event } = getParams();
+    var params = getParams();
+    var event = params.event;
+
+    var oldScript = document.getElementById('jsonp-script');
+    if (oldScript) oldScript.remove();
 
     var script = document.createElement('script');
+    script.id = 'jsonp-script';
     script.src = BACKEND_URL
       + '?action=getConfirmed'
       + '&eventId=' + encodeURIComponent(event)
@@ -315,23 +265,27 @@
     renderPlayers(data);
   }
 
+  function showEmpty() {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('app').style.display = 'block';
+    document.getElementById('empty-state').style.display = 'block';
+  }
   function renderPlayers(data) {
-    const confirmed = data.confirmed || [];
-    const count = data.count || 0;
-    const slots = data.slots || 0;
+    var confirmed = data.confirmed || [];
+    var count = data.count || 0;
+    var slots = data.slots || 0;
 
-    // Update slot count
     document.getElementById('confirmed-count').textContent = count;
     document.getElementById('slot-total').textContent = slots;
 
-    // Update progress bar
-    const pct = slots > 0 ? Math.min((count / slots) * 100, 100) : 0;
-    const fill = document.getElementById('progress-fill');
+    var pct = slots > 0 ? Math.min((count / slots) * 100, 100) : 0;
+    var fill = document.getElementById('progress-fill');
     fill.style.width = pct + '%';
-    if (count > slots) {
+
+    if (count > slots && slots > 0) {
       fill.className = 'progress-fill over';
       document.getElementById('oversubscribed-msg').style.display = 'block';
-    } else if (count === slots) {
+    } else if (count === slots && slots > 0) {
       fill.className = 'progress-fill full';
       document.getElementById('oversubscribed-msg').style.display = 'none';
     } else {
@@ -339,40 +293,33 @@
       document.getElementById('oversubscribed-msg').style.display = 'none';
     }
 
-    // Render player list
-    const list = document.getElementById('player-list');
-    const empty = document.getElementById('empty-state');
+    var list = document.getElementById('player-list');
+    var empty = document.getElementById('empty-state');
 
     if (confirmed.length === 0) {
       list.innerHTML = '';
       empty.style.display = 'block';
     } else {
       empty.style.display = 'none';
-      list.innerHTML = confirmed.map((player, i) => `
-        <li class="player-item">
-          <div class="player-number">${i + 1}</div>
-          <div class="player-info">
-            <div class="player-name">${player.name}</div>
-            <div class="player-tags">
-              ${getWalkRideTag(player.walkRide)}
-              ${getScoringTag(player.scoring)}
-            </div>
-          </div>
-        </li>
-      `).join('');
+      var html = '';
+      for (var i = 0; i < confirmed.length; i++) {
+        var player = confirmed[i];
+        html += '<li class="player-item">';
+        html += '<div class="player-number">' + (i + 1) + '</div>';
+        html += '<div class="player-info">';
+        html += '<div class="player-name">' + player.name + '</div>';
+        html += '<div class="player-tags">';
+        html += getWalkRideTag(player.walkRide);
+        html += getScoringTag(player.scoring);
+        html += '</div></div></li>';
+      }
+      list.innerHTML = html;
     }
 
     document.getElementById('loading').style.display = 'none';
     document.getElementById('app').style.display = 'block';
   }
 
-  function showEmpty() {
-    document.getElementById('loading').style.display = 'none';
-    document.getElementById('app').style.display = 'block';
-    document.getElementById('empty-state').style.display = 'block';
-  }
-
-  // Auto refresh every 60 seconds
   loadPlayers();
   setInterval(loadPlayers, 60000);
 </script>
