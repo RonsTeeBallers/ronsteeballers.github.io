@@ -292,32 +292,27 @@
     return '';
   }
 
-  async function loadPlayers() {
+  function loadPlayers() {
     const { event } = getParams();
 
-    try {
-      var url = BACKEND_URL + '?action=getConfirmed&eventId=' + encodeURIComponent(event);
-      const response = await fetch(url, {
-        method: 'GET',
-        redirect: 'follow'
-      });
-      const data = await response.json();
-
-      if (data.error) {
-        console.log('Error:', data.error);
-        showEmpty();
-        return;
-      }
-
-      renderPlayers(data);
-
-    } catch(e) {
-      console.log('Error loading players:', e);
-      showEmpty();
-    }
+    var script = document.createElement('script');
+    script.src = BACKEND_URL
+      + '?action=getConfirmed'
+      + '&eventId=' + encodeURIComponent(event)
+      + '&callback=handlePlayersResponse';
+    document.body.appendChild(script);
 
     document.getElementById('last-updated').textContent =
       'Last updated: ' + new Date().toLocaleTimeString();
+  }
+
+  function handlePlayersResponse(data) {
+    if (data.error) {
+      console.log('Error:', data.error);
+      showEmpty();
+      return;
+    }
+    renderPlayers(data);
   }
 
   function renderPlayers(data) {
