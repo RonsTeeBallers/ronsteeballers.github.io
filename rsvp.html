@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Golf Outing RSVP</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f4f8;
+      color: #1a2332;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #1a5276;
+      color: white;
+      padding: 20px 16px;
+      text-align: center;
+    }
+
+    .header .logo {
+      font-size: 28px;
+      margin-bottom: 4px;
+    }
+
+    .header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 2px;
+    }
+
+    .header p {
+      font-size: 14px;
+      opacity: 0.85;
+    }
+
+    .event-card {
+      background: white;
+      margin: 16px;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .event-card h2 {
+      font-size: 18px;
+      color: #1a5276;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #eaf2ff;
+    }
+
+    .event-detail {
+      display: flex;
+      align-items: flex-start;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+
+    .event-detail .label {
+      font-weight: 600;
+      color: #5d6d7e;
+      width: 110px;
+      flex-shrink: 0;
+      font-size: 14px;
+      padding-top: 1px;
+    }
+
+    .event-detail .value {
+      color: #1a2332;
+      font-size: 16px;
+    }
+
+    .event-detail .value a {
+      color: #1a5276;
+      text-decoration: none;
+      font-weight: 600;
+    }
+
+    .event-notes {
+      background: #eaf2ff;
+      border-left: 3px solid #1a5276;
+      padding: 10px 12px;
+      border-radius: 0 8px 8px 0;
+      margin-top: 12px;
+      font-size: 15px;
+      color: #1a2332;
+    }
+
+    .form-card {
+      background: white;
+      margin: 0 16px 16px;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+
+    .greeting {
+      font-size: 20px;
+      font-weight: 700;
+      color: #1a5276;
+      margin-bottom: 6px;
+    }
+
+    .question {
+      font-size: 17px;
+      color: #1a2332;
+      margin-bottom: 16px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+
+    .btn-choice {
+      flex: 1;
+      padding: 18px 12px;
+      border: 3px solid #d0d8e4;
+      border-radius: 12px;
+      background: white;
+      font-size: 18px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      color: #5d6d7e;
+    }
+
+    .btn-choice:active {
+      transform: scale(0.97);
+    }
+
+    .btn-choice.selected-yes {
+      background: #1a5276;
+      border-color: #1a5276;
+      color: white;
+    }
+
+    .btn-choice.selected-no {
+      background: #922b21;
+      border-color: #922b21;
+      color: white;
+    }
+
+    .btn-choice.selected-walk,
+    .btn-choice.selected-ride,
+    .btn-choice.selected-nopref {
+      background: #1a5276;
+      border-color: #1a5276;
+      color: white;
+    }
+
+    .section {
+      margin-bottom: 24px;
+    }
+
+    .section-label {
+      font-size: 15px;
+      font-weight: 600;
+      color: #5d6d7e;
+      margin-bottom: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .btn-group-3 {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-group-3 .btn-choice {
+      font-size: 15px;
+      padding: 16px 8px;
+    }
+
+    textarea {
+      width: 100%;
+      padding: 14px;
+      border: 2px solid #d0d8e4;
+      border-radius: 12px;
+      font-size: 16px;
+      font-family: inherit;
+      resize: vertical;
+      min-height: 80px;
+      color: #1a2332;
+      transition: border-color 0.15s;
+    }
+
+    textarea:focus {
+      outline: none;
+      border-color: #1a5276;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .btn-submit {
+      width: 100%;
+      padding: 20px;
+      background: #1a5276;
+      color: white;
+      border: none;
+      border-radius: 12px;
+      font-size: 20px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.15s;
+      margin-top: 8px;
+    }
+
+    .btn-submit:active {
+      background: #154360;
+      transform: scale(0.98);
+    }
+
+    .btn-submit:disabled {
+      background: #aed6f1;
+      cursor: not-allowed;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px 20px;
+      color: #5d6d7e;
+      font-size: 16px;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #eaf2ff;
+      border-top-color: #1a5276;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .confirmation {
+      text-align: center;
+      padding: 20px;
+    }
+
+    .confirmation .icon {
+      font-size: 56px;
+      margin-bottom: 16px;
+    }
+
+    .confirmation h2 {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a5276;
+      margin-bottom: 8px;
+    }
+
+    .confirmation p {
+      font-size: 16px;
+      color: #5d6d7e;
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+
+    .confirmation-no h2 {
+      color: #922b21;
+    }
+
+    .btn-signup-list {
+      display: inline-block;
+      background: #1a5276;
+      color: white;
+      padding: 16px 24px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: 700;
+      text-decoration: none;
+      margin-top: 8px;
+    }
+
+    .error-msg {
+      background: #fdf2f2;
+      border: 1px solid #e74c3c;
+      color: #922b21;
+      padding: 12px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      margin-top: 12px;
+    }
+
+    .fee-total {
+      font-weight: 700;
+      color: #1a5276;
+    }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">⛳</div>
+  <h1>RonsTeeBallers</h1>
+  <p>Golf Outing RSVP</p>
+</div>
+
+<div id="loading" class="loading event-card" style="margin:16px;">
+  <div class="spinner"></div>
+  Loading event details...
+</div>
+
+<div id="app" class="hidden">
+  <!-- Event Details -->
+  <div class="event-card">
+    <h2 id="event-title">Golf Outing</h2>
+    <div class="event-detail">
+      <span class="label">Date</span>
+      <span class="value" id="event-date"></span>
+    </div>
+    <div class="event-detail">
+      <span class="label">Venue</span>
+      <span class="value" id="event-venue"></span>
+    </div>
+    <div class="event-detail">
+      <span class="label">Tee Time</span>
+      <span class="value" id="event-time"></span>
+    </div>
+    <div class="event-detail">
+      <span class="label">Slots</span>
+      <span class="value" id="event-slots"></span>
+    </div>
+    <div class="event-detail" id="fee-row">
+      <span class="label">Fee</span>
+      <span class="value" id="event-fee"></span>
+    </div>
+    <div id="event-notes-container" class="hidden">
+      <div class="event-notes" id="event-notes"></div>
+    </div>
+  </div>
+
+  <!-- RSVP Form -->
+  <div class="form-card" id="form-section">
+    <div class="greeting" id="greeting">Hi there!</div>
+    <div class="question">Will you be playing?</div>
+
+    <div class="btn-group">
+      <button class="btn-choice" id="btn-yes" onclick="selectPlaying('yes')">✅ I'M IN</button>
+      <button class="btn-choice" id="btn-no" onclick="selectPlaying('no')">❌ I'M OUT</button>
+    </div>
+
+    <div id="yes-section" class="hidden">
+      <div class="section">
+        <div class="section-label">Walk or Ride?</div>
+        <div class="btn-group-3">
+          <button class="btn-choice" id="btn-walk" onclick="selectWalkRide('walk')">🚶 Walk</button>
+          <button class="btn-choice" id="btn-ride" onclick="selectWalkRide('ride')">🛺 Ride</button>
+          <button class="btn-choice" id="btn-nopref" onclick="selectWalkRide('nopref')">Either</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <div class="section-label">Comments / Guests (optional)</div>
+        <textarea id="comments" placeholder="Guest names, special requests, anything else..."></textarea>
+      </div>
+    </div>
+
+    <div id="error-msg" class="error-msg hidden"></div>
+
+    <button class="btn-submit hidden" id="btn-submit" onclick="submitRSVP()">Submit RSVP</button>
+  </div>
+
+  <!-- Confirmation -->
+  <div class="form-card hidden" id="confirmation-section">
+    <div class="confirmation" id="confirmation-yes" class="hidden">
+      <div class="icon">🎉</div>
+      <h2>You're in!</h2>
+      <p>Thanks! The proposed groups will be sent out before the outing. To see who else has signed up:</p>
+      <a class="btn-signup-list" id="signup-list-link" href="#" target="_blank">See Who's Playing</a>
+    </div>
+    <div class="confirmation confirmation-no hidden" id="confirmation-no">
+      <div class="icon">👋</div>
+      <h2>No worries!</h2>
+      <p>Thanks for letting us know. Hope to see you next time!</p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ─── Configuration ───────────────────────────────────────────────
+  const SHEET_ID = '163YUrFxT9Ini1GvGMGknuwM9y_KAgluqORj1R7mhUJc';
+  const SIGNUP_LIST_URL = 'https://bit.ly/thursdaygolf'; // Update per event
+
+  // ─── State ───────────────────────────────────────────────────────
+  let playerName = '';
+  let playerFirst = '';
+  let eventId = '';
+  let playingChoice = '';
+  let walkRideChoice = '';
+  let eventData = {};
+
+  // ─── Parse URL Parameters ─────────────────────────────────────────
+  function getParams() {
+    const params = new URLSearchParams(window.location.search);
+    return {
+      event: params.get('event') || '',
+      player: params.get('player') || ''
+    };
+  }
+
+  // ─── Format date nicely ───────────────────────────────────────────
+  function formatDate(dateStr) {
+    if (!dateStr) return '';
+    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    const months = ['January','February','March','April','May','June',
+                    'July','August','September','October','November','December'];
+    const d = new Date(dateStr + 'T12:00:00');
+    return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+  }
+
+  // ─── Load Event Data from Google Sheets via API ───────────────────
+  async function loadEventData(eventId, playerSlug) {
+    try {
+      // We use a Google Apps Script Web App as the backend
+      // This will be set up in the next step
+      const backendUrl = 'YOUR_APPS_SCRIPT_URL'; // Set after deploying Apps Script
+
+      const response = await fetch(`${backendUrl}?action=getEvent&eventId=${eventId}&player=${playerSlug}`);
+      const data = await response.json();
+
+      if (data.error) {
+        showError(data.error);
+        return;
+      }
+
+      return data;
+    } catch (e) {
+      // For now show demo data while backend is being set up
+      return getDemoData(playerSlug);
+    }
+  }
+
+  // ─── Demo Data for Testing ────────────────────────────────────────
+  function getDemoData(playerSlug) {
+    const playerNames = {
+      'cecil-mark': { first: 'Mark', last: 'Cecil', full: 'Cecil, Mark' },
+      'blanton-ron': { first: 'Ron', last: 'Blanton', full: 'Blanton, Ron' },
+      'test-player': { first: 'Test', last: 'Player', full: 'Player, Test' }
+    };
+
+    const player = playerNames[playerSlug] || { first: 'Golfer', last: '', full: playerSlug };
+
+    return {
+      player: player,
+      event: {
+        title: 'Thursday Golf Outing',
+        date: '2026-06-19',
+        venue: 'River Bend Golf Course',
+        venueUrl: 'https://www.riverbendgolf.com',
+        time: '11:15 AM',
+        slots: '5 tee times reserved',
+        greenFee: '$28.00',
+        cartFee: '$16.00',
+        total: '$44.00',
+        notes: 'Cart path only this week due to recent rain.',
+        signupListUrl: SIGNUP_LIST_URL
+      }
+    };
+  }
+
+  // ─── Initialize Page ──────────────────────────────────────────────
+  async function init() {
+    const { event, player } = getParams();
+    eventId = event;
+
+    const data = await loadEventData(event, player);
+
+    if (!data) return;
+
+    playerFirst = data.player.first;
+    playerName = data.player.full;
+    eventData = data.event;
+
+    // Populate event details
+    document.getElementById('event-title').textContent = data.event.title || 'Golf Outing';
+    document.getElementById('event-date').textContent = formatDate(data.event.date);
+    document.getElementById('event-venue').innerHTML = data.event.venueUrl
+      ? `<a href="${data.event.venueUrl}" target="_blank">${data.event.venue}</a>`
+      : data.event.venue;
+    document.getElementById('event-time').textContent = data.event.time;
+    document.getElementById('event-slots').textContent = data.event.slots;
+
+    if (data.event.total) {
+      document.getElementById('event-fee').innerHTML =
+        `Green Fee ${data.event.greenFee} + Cart ${data.event.cartFee} = <span class="fee-total">${data.event.total}</span>`;
+    } else {
+      document.getElementById('fee-row').classList.add('hidden');
+    }
+
+    if (data.event.notes) {
+      document.getElementById('event-notes').textContent = data.event.notes;
+      document.getElementById('event-notes-container').classList.remove('hidden');
+    }
+
+    // Set signup list URL
+    document.getElementById('signup-list-link').href = data.event.signupListUrl || SIGNUP_LIST_URL;
+
+    // Set greeting
+    document.getElementById('greeting').textContent = `Hi ${playerFirst}!`;
+
+    // Show app hide loading
+    document.getElementById('loading').classList.add('hidden');
+    document.getElementById('app').classList.remove('hidden');
+  }
+
+  // ─── UI Interactions ──────────────────────────────────────────────
+  function selectPlaying(choice) {
+    playingChoice = choice;
+
+    document.getElementById('btn-yes').className = 'btn-choice' + (choice === 'yes' ? ' selected-yes' : '');
+    document.getElementById('btn-no').className = 'btn-choice' + (choice === 'no' ? ' selected-no' : '');
+
+    if (choice === 'yes') {
+      document.getElementById('yes-section').classList.remove('hidden');
+    } else {
+      document.getElementById('yes-section').classList.add('hidden');
+      walkRideChoice = '';
+    }
+
+    document.getElementById('btn-submit').classList.remove('hidden');
+  }
+
+  function selectWalkRide(choice) {
+    walkRideChoice = choice;
+    document.getElementById('btn-walk').className = 'btn-choice' + (choice === 'walk' ? ' selected-walk' : '');
+    document.getElementById('btn-ride').className = 'btn-choice' + (choice === 'ride' ? ' selected-ride' : '');
+    document.getElementById('btn-nopref').className = 'btn-choice' + (choice === 'nopref' ? ' selected-nopref' : '');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  // ─── Submit RSVP ──────────────────────────────────────────────────
+  async function submitRSVP() {
+    if (!playingChoice) {
+      showError('Please select Yes or No.');
+      return;
+    }
+
+    const btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+
+    const walkRideMap = { walk: 'Walk', ride: 'Ride', nopref: 'No preference', '': '' };
+    const payload = {
+      action: 'submitRSVP',
+      eventId: eventId,
+      playerName: playerName,
+      playing: playingChoice === 'yes' ? 'Yes' : 'No',
+      walkRide: walkRideMap[walkRideChoice] || '',
+      comments: document.getElementById('comments') ? document.getElementById('comments').value : '',
+      timestamp: new Date().toISOString()
+    };
+
+    try {
+      const backendUrl = 'YOUR_APPS_SCRIPT_URL'; // Set after deploying Apps Script
+      await fetch(backendUrl, {
+        method: 'POST',
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      // Continue to confirmation even if backend not yet set up
+      console.log('Backend not yet configured — showing confirmation anyway');
+    }
+
+    // Show confirmation
+    document.getElementById('form-section').classList.add('hidden');
+    document.getElementById('confirmation-section').classList.remove('hidden');
+
+    if (playingChoice === 'yes') {
+      document.getElementById('confirmation-yes').classList.remove('hidden');
+      document.getElementById('confirmation-no').classList.add('hidden');
+    } else {
+      document.getElementById('confirmation-yes').classList.add('hidden');
+      document.getElementById('confirmation-no').classList.remove('hidden');
+    }
+  }
+
+  // ─── Start ────────────────────────────────────────────────────────
+  init();
+</script>
+</body>
+</html>
