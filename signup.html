@@ -296,9 +296,11 @@
     const { event } = getParams();
 
     try {
-      const response = await fetch(
-        `${BACKEND_URL}?action=getConfirmed&eventId=${encodeURIComponent(event)}`
-      );
+      var url = BACKEND_URL + '?action=getConfirmed&eventId=' + encodeURIComponent(event);
+      const response = await fetch(url, {
+        method: 'GET',
+        redirect: 'follow'
+      });
       const data = await response.json();
 
       if (data.error) {
