@@ -370,7 +370,7 @@
       document.getElementById('event-notes-container').classList.remove('hidden');
     }
 
-    document.getElementById('signup-list-link').href = data.event.signupListUrl || SIGNUP_LIST_URL;
+    document.getElementById('signup-list-link').href = 'https://ronsteeballers.github.io/signup.html?event=' + eventId;
     document.getElementById('greeting').textContent = `Hi ${playerFirst}!`;
 
     document.getElementById('loading').classList.add('hidden');
