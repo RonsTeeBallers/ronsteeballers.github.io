@@ -6,14 +6,12 @@
   <title>Pairing — RonsTeeBallers</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
       background: #f0f4f8;
       color: #1a2332;
       min-height: 100vh;
     }
-
     .header {
       background: #1a5276;
       color: white;
@@ -44,16 +42,13 @@
       font-weight: 700;
     }
     .header-count.all-assigned { background: #1e8449; }
-
     .toolbar {
       background: white;
       padding: 10px 16px;
       display: flex;
       gap: 8px;
       border-bottom: 1px solid #e0e8f0;
-      overflow-x: auto;
     }
-
     .toolbar-btn {
       padding: 8px 14px;
       border-radius: 8px;
@@ -61,34 +56,27 @@
       font-weight: 700;
       cursor: pointer;
       border: none;
-      white-space: nowrap;
       transition: all 0.15s;
     }
-    .toolbar-btn:active { transform: scale(0.97); }
-    .btn-add-foursome { background: #eaf2ff; color: #1a5276; }
+    .btn-add { background: #eaf2ff; color: #1a5276; }
     .btn-send { background: #1e8449; color: white; }
     .btn-send:disabled { background: #aab7c4; cursor: not-allowed; }
-    .btn-back-org { background: #f2f3f4; color: #5d6d7e; }
-
+    .btn-dash { background: #f2f3f4; color: #5d6d7e; }
     .layout {
       display: flex;
-      gap: 0;
       height: calc(100vh - 110px);
     }
-
-    .unassigned-panel {
+    .left-panel {
       width: 200px;
       min-width: 200px;
       background: white;
       border-right: 2px solid #e0e8f0;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
     }
-
-    .panel-header {
+    .panel-title {
       padding: 10px 12px;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       color: #5d6d7e;
       text-transform: uppercase;
@@ -96,110 +84,86 @@
       border-bottom: 1px solid #f0f4f8;
       background: #f8fafc;
     }
-
-    .unassigned-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 8px;
-    }
-
-    .foursomes-panel {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
+    .left-scroll { flex: 1; overflow-y: auto; padding: 8px; }
+    .right-panel { flex: 1; overflow-y: auto; padding: 12px; }
     .player-card {
       background: white;
-      border-radius: 10px;
-      padding: 10px 12px;
+      border-radius: 8px;
+      padding: 8px 10px;
       margin-bottom: 6px;
       cursor: grab;
       border-left: 4px solid #d0d8e4;
-      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
-      transition: all 0.15s;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.08);
       user-select: none;
     }
-    .player-card:active { cursor: grabbing; }
-    .player-card.dragging { opacity: 0.5; transform: scale(0.98); }
+    .player-card.dragging { opacity: 0.4; }
     .player-card.scramble { border-left-color: #1e8449; }
     .player-card.ownball { border-left-color: #1a5276; }
     .player-card.nopref { border-left-color: #aab7c4; }
-    .player-card.has-avoid { background: #fffbf0; }
-
-    .card-name { font-size: 14px; font-weight: 700; color: #1a2332; margin-bottom: 4px; }
-    .card-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 3px; }
-
-    .tag { font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; }
-    .tag-walk { background: #eaf2ff; color: #1a5276; }
-    .tag-ride { background: #fef9e7; color: #d68910; }
-    .tag-nopref-wr { background: #f2f3f4; color: #5d6d7e; }
-    .tag-scramble { background: #eafaf1; color: #1e8449; }
-    .tag-ownball { background: #eaf2ff; color: #1a5276; }
-    .tag-avoid { background: #fdf2f2; color: #922b21; }
-
-    .card-preferred { font-size: 10px; color: #5d6d7e; margin-top: 2px; }
-    .card-comments { font-size: 10px; color: #922b21; margin-top: 2px; font-style: italic; }
-
-    .foursome {
+    .card-name { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
+    .card-tags { display: flex; gap: 3px; flex-wrap: wrap; }
+    .tag { font-size: 10px; font-weight: 700; padding: 1px 5px; border-radius: 8px; }
+    .tw { background: #eaf2ff; color: #1a5276; }
+    .tr { background: #fef9e7; color: #d68910; }
+    .te { background: #f2f3f4; color: #5d6d7e; }
+    .ts { background: #eafaf1; color: #1e8449; }
+    .to { background: #eaf2ff; color: #1a5276; }
+    .ta { background: #fdf2f2; color: #922b21; }
+    .card-note { font-size: 10px; color: #922b21; margin-top: 2px; font-style: italic; }
+    .card-pref { font-size: 10px; color: #5d6d7e; margin-top: 2px; }
+    .foursome-block {
       background: white;
-      border-radius: 12px;
-      box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.07);
+      margin-bottom: 12px;
       overflow: hidden;
     }
-
-    .foursome-header {
+    .foursome-hdr {
       background: #1a5276;
       color: white;
-      padding: 10px 14px;
+      padding: 8px 12px;
       display: flex;
       align-items: center;
       gap: 8px;
     }
-    .foursome-title { font-size: 15px; font-weight: 700; flex: 1; }
-    .foursome-time { font-size: 13px; opacity: 0.85; }
-    .foursome-count {
+    .fs-title { font-size: 14px; font-weight: 700; flex: 1; }
+    .fs-time { font-size: 12px; opacity: 0.85; }
+    .fs-count {
       background: rgba(255,255,255,0.2);
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-size: 12px;
+      padding: 2px 7px;
+      border-radius: 8px;
+      font-size: 11px;
       font-weight: 700;
     }
-    .foursome-count.full { background: #1e8449; }
-
-    .foursome-body { padding: 8px; min-height: 60px; }
-
-    .drop-zone {
+    .fs-count.full { background: #1e8449; }
+    .foursome-body { padding: 8px; min-height: 50px; }
+    .drop-hint {
       border: 2px dashed #d0d8e4;
-      border-radius: 8px;
-      padding: 12px;
+      border-radius: 6px;
+      padding: 10px;
       text-align: center;
       color: #aab7c4;
-      font-size: 13px;
+      font-size: 12px;
       margin-top: 4px;
-      transition: all 0.15s;
     }
-    .drop-zone.drag-over-zone { border-color: #1a5276; background: #eaf2ff; color: #1a5276; }
-
-    .loading {
-      text-align: center;
-      padding: 60px 20px;
+    .drop-hint.over { border-color: #1a5276; background: #eaf2ff; color: #1a5276; }
+    .spinner-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      flex-direction: column;
+      gap: 16px;
       color: #5d6d7e;
     }
     .spinner {
-      width: 40px;
-      height: 40px;
+      width: 40px; height: 40px;
       border: 4px solid #eaf2ff;
       border-top-color: #1a5276;
       border-radius: 50%;
       animation: spin 0.8s linear infinite;
-      margin: 0 auto 16px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
-
     .toast {
       position: fixed;
       bottom: 24px;
@@ -207,371 +171,294 @@
       transform: translateX(-50%);
       background: #1a2332;
       color: white;
-      padding: 12px 24px;
-      border-radius: 24px;
-      font-size: 14px;
+      padding: 12px 20px;
+      border-radius: 20px;
+      font-size: 13px;
       font-weight: 600;
       opacity: 0;
       transition: opacity 0.3s;
-      z-index: 1000;
-      white-space: nowrap;
+      z-index: 999;
     }
     .toast.show { opacity: 1; }
-
-    @media (max-width: 600px) {
-      .unassigned-panel { width: 160px; min-width: 160px; }
-      .player-card { padding: 8px 10px; }
-      .card-name { font-size: 13px; }
-    }
-    <div class="header">
-  <button class="header-back" onclick="window.location.href='organizer.html'">‹</button>
-  <div class="header-info">
-    <div class="header-title" id="header-venue">Loading...</div>
-    <div class="header-sub" id="header-date"></div>
-  </div>
-  <div class="header-count" id="unassigned-count">0 unassigned</div>
-</div>
-
-<div class="toolbar">
-  <button class="toolbar-btn btn-add-foursome" onclick="addFoursome()">+ Add Foursome</button>
-  <button class="toolbar-btn btn-send" id="btn-send" onclick="sendPairings()" disabled>Send Pairings</button>
-  <button class="toolbar-btn btn-back-org" onclick="window.location.href='organizer.html'">Dashboard</button>
-</div>
-
-<div id="loading" class="loading">
+  </style>
+</head>
+<body>
+<div id="spinner-wrap" class="spinner-wrap">
   <div class="spinner"></div>
-  Loading players...
+  <div>Loading players...</div>
 </div>
 
-<div id="app" style="display:none;">
-  <div class="layout">
-    <div class="unassigned-panel">
-      <div class="panel-header">Unassigned</div>
-      <div class="unassigned-list" id="unassigned-list"
-        ondragover="allowDrop(event)"
-        ondrop="dropToUnassigned(event)">
-      </div>
+<div id="main-ui" style="display:none;">
+  <div class="header">
+    <button class="header-back" onclick="window.location.href='organizer.html'">&#8249;</button>
+    <div class="header-info">
+      <div class="header-title" id="hdr-venue">Golf Outing</div>
+      <div class="header-sub" id="hdr-date"></div>
     </div>
-    <div class="foursomes-panel" id="foursomes-panel"></div>
+    <div class="header-count" id="hdr-count">Loading</div>
+  </div>
+
+  <div class="toolbar">
+    <button class="toolbar-btn btn-add" onclick="addFoursome()">+ Foursome</button>
+    <button class="toolbar-btn btn-send" id="btn-send" disabled onclick="sendPairings()">Send Pairings</button>
+    <button class="toolbar-btn btn-dash" onclick="window.location.href='organizer.html'">Dashboard</button>
+  </div>
+
+  <div class="layout">
+    <div class="left-panel">
+      <div class="panel-title">Unassigned</div>
+      <div class="left-scroll" id="pool"
+        ondragover="onDragOver(event)"
+        ondrop="onDropPool(event)"></div>
+    </div>
+    <div class="right-panel" id="foursomes"></div>
   </div>
 </div>
 
 <div class="toast" id="toast"></div>
-  </style>
-</head>
-<body>
-  <script>
-  var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzL0X46zPieSTws-g4CvgWJHHdIjchU9yTVU70OK54FsaaKhIw58-paJXv5MMP3gd9C/exec';
+<script>
+var BACKEND = 'https://script.google.com/macros/s/AKfycbzL0X46zPieSTws-g4CvgWJHHdIjchU9yTVU70OK54FsaaKhIw58-paJXv5MMP3gd9C/exec';
+var eventId = new URLSearchParams(window.location.search).get('event') || '';
+var players = [];
+var groups = [];
+var startMin = 660;
+var interval = 9;
+var dragging = null;
 
-  var eventId = '';
-  var allPlayers = [];
-  var foursomes = [];
-  var teeTimeInterval = 9;
-  var startMinutes = 0;
-  var draggedPlayer = null;
+function toast(msg) {
+  var el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(function(){ el.classList.remove('show'); }, 2500);
+}
 
-  function getParams() {
-    var params = new URLSearchParams(window.location.search);
-    return { event: params.get('event') || '' };
-  }
+function jsonp(action, params, cb) {
+  var fn = 'cb_' + Date.now();
+  window[fn] = cb;
+  var url = BACKEND + '?action=' + action + '&callback=' + fn;
+  for (var k in params) url += '&' + k + '=' + encodeURIComponent(params[k]);
+  var s = document.createElement('script');
+  s.src = url;
+  document.head.appendChild(s);
+}
 
-  function showToast(msg) {
-    var t = document.getElementById('toast');
-    t.textContent = msg;
-    t.classList.add('show');
-    setTimeout(function() { t.classList.remove('show'); }, 3000);
-  }
+function fmtTime(min) {
+  var h = Math.floor(min/60), m = min%60, ap = h>=12?'PM':'AM';
+  h = h%12||12;
+  return h+':'+(m<10?'0'+m:m)+' '+ap;
+}
 
-  function jsonpCall(action, params, callback) {
-    var fnName = 'handle_' + action.replace(/[^a-z]/gi,'_') + '_' + Date.now();
-    window[fnName] = function(data) { callback(data); };
-    var url = BACKEND_URL + '?action=' + action + '&callback=' + fnName;
-    if (params) {
-      for (var key in params) {
-        url += '&' + key + '=' + encodeURIComponent(params[key]);
+function parseTime(str) {
+  if (!str) return 660;
+  var m = (str+'').match(/(\d+):(\d+)\s*(AM|PM)/i);
+  if (!m) return 660;
+  var h = +m[1], mn = +m[2], ap = m[3].toUpperCase();
+  if (ap==='PM'&&h!==12) h+=12;
+  if (ap==='AM'&&h===12) h=0;
+  return h*60+mn;
+}
+
+function scoreCls(s) {
+  if (!s) return 'nopref';
+  s = s.toLowerCase();
+  if (s==='scramble') return 'scramble';
+  if (s==='own ball') return 'ownball';
+  return 'nopref';
+}
+
+function wrTag(wr) {
+  if (!wr) return '';
+  var v = wr.toLowerCase();
+  if (v==='walk') return '<span class="tag tw">Walk</span>';
+  if (v==='ride') return '<span class="tag tr">Ride</span>';
+  return '<span class="tag te">Either</span>';
+}
+
+function scoreTag(s) {
+  if (!s) return '';
+  var v = s.toLowerCase();
+  if (v==='scramble') return '<span class="tag ts">Scramble</span>';
+  if (v==='own ball') return '<span class="tag to">Own Ball</span>';
+  return '';
+}
+
+function hasAvoid(player, members) {
+  if (!player.avoid) return false;
+  var av = player.avoid.toLowerCase().split(';').map(function(x){return x.trim();});
+  for (var i=0; i<members.length; i++) {
+    var mn = members[i].name.toLowerCase();
+    for (var j=0; j<av.length; j++) {
+      if (av[j] && mn.indexOf(av[j])!==-1) return true;
+    }
+    if (members[i].avoid) {
+      var mav = members[i].avoid.toLowerCase().split(';').map(function(x){return x.trim();});
+      var pn = player.name.toLowerCase();
+      for (var k=0; k<mav.length; k++) {
+        if (mav[k] && pn.indexOf(mav[k])!==-1) return true;
       }
     }
-    var script = document.createElement('script');
-    script.src = url;
-    document.body.appendChild(script);
   }
+  return false;
+}
 
-  function formatTime(minutes) {
-    var h = Math.floor(minutes / 60);
-    var m = minutes % 60;
-    var ampm = h >= 12 ? 'PM' : 'AM';
-    h = h % 12 || 12;
-    return h + ':' + (m < 10 ? '0' + m : m) + ' ' + ampm;
-  }
+function cardHTML(p, gIdx) {
+  var avoid = (gIdx!==null && gIdx!==undefined && groups[gIdx])
+    ? hasAvoid(p, groups[gIdx].filter(function(x){return x.name!==p.name;}))
+    : false;
+  var id = 'c_'+p.name.replace(/[^a-z0-9]/gi,'_');
+  var h = '<div class="player-card '+scoreCls(p.scoring)+'" id="'+id+'" draggable="true" ';
+  h += 'ondragstart="onDragStart(event,\''+p.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\''+')" ';
+  h += 'ondragend="onDragEnd(event)">';
+  h += '<div class="card-name">'+p.name+'</div>';
+  h += '<div class="card-tags">'+wrTag(p.walkRide)+scoreTag(p.scoring);
+  if (avoid) h += '<span class="tag ta">Avoid</span>';
+  h += '</div>';
+  if (p.preferred) h += '<div class="card-pref">Prefers: '+p.preferred+'</div>';
+  if (p.comments) h += '<div class="card-note">'+p.comments+'</div>';
+  h += '</div>';
+  return h;
+}
 
-  function parseTime(timeStr) {
-    if (!timeStr) return 660;
-    var clean = timeStr.toString().trim();
-    var parts = clean.match(/(\d+):(\d+)\s*(AM|PM)/i);
-    if (!parts) return 660;
-    var h = parseInt(parts[1]);
-    var m = parseInt(parts[2]);
-    var ampm = parts[3].toUpperCase();
-    if (ampm === 'PM' && h !== 12) h += 12;
-    if (ampm === 'AM' && h === 12) h = 0;
-    return h * 60 + m;
-  }
+function render() {
+  var pool = document.getElementById('pool');
+  var fsDiv = document.getElementById('foursomes');
+  var unassigned = players.filter(function(p){return !p.assigned;});
 
-  function getScoringClass(scoring) {
-    if (!scoring) return 'nopref';
-    var v = scoring.toLowerCase();
-    if (v === 'scramble') return 'scramble';
-    if (v === 'own ball') return 'ownball';
-    return 'nopref';
-  }
+  pool.innerHTML = unassigned.length === 0
+    ? '<div style="text-align:center;padding:16px;color:#aab7c4;font-size:12px;">All assigned!</div>'
+    : unassigned.map(function(p){return cardHTML(p,null);}).join('');
 
-  function getWalkRideTag(wr) {
-    if (!wr) return '';
-    var v = wr.toLowerCase();
-    if (v === 'walk') return '<span class="tag tag-walk">Walk</span>';
-    if (v === 'ride') return '<span class="tag tag-ride">Ride</span>';
-    return '<span class="tag tag-nopref-wr">Either</span>';
-  }
-
-  function getScoringTag(scoring) {
-    if (!scoring) return '';
-    var v = scoring.toLowerCase();
-    if (v === 'scramble') return '<span class="tag tag-scramble">Scramble</span>';
-    if (v === 'own ball') return '<span class="tag tag-ownball">Own Ball</span>';
-    return '';
-  }
-
-  function checkAvoidConflict(player, members) {
-    if (!player.avoid) return false;
-    var avoidList = player.avoid.toLowerCase().split(';').map(function(s) { return s.trim(); });
-    for (var i = 0; i < members.length; i++) {
-      var memberName = members[i].name.toLowerCase();
-      for (var j = 0; j < avoidList.length; j++) {
-        if (avoidList[j] && memberName.indexOf(avoidList[j]) !== -1) return true;
-      }
-      if (members[i].avoid) {
-        var memberAvoid = members[i].avoid.toLowerCase().split(';').map(function(s) { return s.trim(); });
-        var pname = player.name.toLowerCase();
-        for (var k = 0; k < memberAvoid.length; k++) {
-          if (memberAvoid[k] && pname.indexOf(memberAvoid[k]) !== -1) return true;
-        }
-      }
-    }
-    return false;
-  }
-    function buildPlayerCard(player, foursomeIdx) {
-    var scoringClass = getScoringClass(player.scoring);
-    var hasAvoid = false;
-
-    if (foursomeIdx !== null && foursomeIdx !== undefined) {
-      var fs = foursomes[foursomeIdx];
-      if (fs) {
-        var others = fs.players.filter(function(p) { return p.name !== player.name; });
-        hasAvoid = checkAvoidConflict(player, others);
-      }
-    }
-
-    var cardId = 'card-' + player.name.replace(/[^a-z0-9]/gi, '_');
-    var html = '<div class="player-card ' + scoringClass + (hasAvoid ? ' has-avoid' : '') + '" ';
-    html += 'id="' + cardId + '" ';
-    html += 'draggable="true" ';
-    html += 'ondragstart="dragStart(event, \'' + player.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'") + '\')" ';
-    html += 'ondragend="dragEnd(event)">';
-    html += '<div class="card-name">' + player.name + '</div>';
-    html += '<div class="card-tags">';
-    html += getWalkRideTag(player.walkRide);
-    html += getScoringTag(player.scoring);
-    if (hasAvoid) html += '<span class="tag tag-avoid">Avoid conflict</span>';
+  var html = '';
+  groups.forEach(function(grp, idx) {
+    var t = fmtTime(startMin + idx*interval);
+    var full = grp.length >= 4;
+    html += '<div class="foursome-block">';
+    html += '<div class="foursome-hdr">';
+    html += '<span class="fs-title">Foursome '+(idx+1)+'</span>';
+    html += '<span class="fs-time">'+t+'</span>';
+    html += '<span class="fs-count'+(full?' full':'')+'">'+(grp.length)+'/4</span>';
     html += '</div>';
-    if (player.preferred) {
-      html += '<div class="card-preferred">Prefers: ' + player.preferred + '</div>';
+    html += '<div class="foursome-body" ondragover="onDragOver(event)" ondrop="onDropGroup(event,'+idx+')">';
+    html += grp.map(function(p){return cardHTML(p,idx);}).join('');
+    if (!full) {
+      html += '<div class="drop-hint" id="dh'+idx+'" ';
+      html += 'ondragover="onDragOver(event);this.classList.add(\'over\')" ';
+      html += 'ondragleave="this.classList.remove(\'over\')" ';
+      html += 'ondrop="onDropGroup(event,'+idx+')">Drop player here</div>';
     }
-    if (player.comments) {
-      html += '<div class="card-comments">' + player.comments + '</div>';
-    }
-    html += '</div>';
-    return html;
-  }
-
-  function renderUnassigned() {
-    var appEl = document.getElementById('app');
-    if (appEl) appEl.style.display = 'block';
-    var loadingEl = document.getElementById('loading');
-    if (loadingEl) loadingEl.style.display = 'none';
-    var list = document.getElementById('unassigned-list');
-    var unassigned = allPlayers.filter(function(p) { return !p.assigned; });
-    if (unassigned.length === 0) {
-      list.innerHTML = '<div style="text-align:center;padding:20px;color:#aab7c4;font-size:12px;">All players assigned!</div>';
-    } else {
-      list.innerHTML = unassigned.map(function(p) { return buildPlayerCard(p, null); }).join('');
-    }
-    updateUnassignedCount();
-  }
-
-  function updateUnassignedCount() {
-    var unassigned = allPlayers.filter(function(p) { return !p.assigned; });
-    var countEl = document.getElementById('unassigned-count');
-    countEl.textContent = unassigned.length + ' unassigned';
-    countEl.className = 'header-count' + (unassigned.length === 0 ? ' all-assigned' : '');
-    document.getElementById('btn-send').disabled = unassigned.length > 0;
-  }
-
-  function renderFoursomes() {
-    var panel = document.getElementById('foursomes-panel');
-    var html = '';
-    foursomes.forEach(function(fs, idx) {
-      var teeTime = formatTime(startMinutes + idx * teeTimeInterval);
-      var isFull = fs.players.length >= 4;
-      html += '<div class="foursome" id="foursome-' + idx + '">';
-      html += '<div class="foursome-header">';
-      html += '<span class="foursome-title">Foursome ' + (idx + 1) + '</span>';
-      html += '<span class="foursome-time">' + teeTime + '</span>';
-      html += '<span class="foursome-count' + (isFull ? ' full' : '') + '">' + fs.players.length + '/4</span>';
-      html += '</div>';
-      html += '<div class="foursome-body" id="body-' + idx + '" ';
-      html += 'ondragover="allowDrop(event)" ondrop="dropToFoursome(event,' + idx + ')">';
-      fs.players.forEach(function(player) {
-        html += buildPlayerCard(player, idx);
-      });
-      if (!isFull) {
-        html += '<div class="drop-zone" id="zone-' + idx + '" ';
-        html += 'ondragover="allowDrop(event);highlightZone(' + idx + ')" ';
-        html += 'ondragleave="unhighlightZone(' + idx + ')" ';
-        html += 'ondrop="dropToFoursome(event,' + idx + ')">Drop player here</div>';
-      }
-      html += '</div></div>';
-    });
-    panel.innerHTML = html;
-  }
-
-  function render() {
-    renderUnassigned();
-    renderFoursomes();
-  }
-
-  function addFoursome() {
-    foursomes.push({ players: [] });
-    render();
-    showToast('Foursome ' + foursomes.length + ' added');
-  }
-
-  function allowDrop(e) { e.preventDefault(); }
-
-  function highlightZone(idx) {
-    var z = document.getElementById('zone-' + idx);
-    if (z) z.classList.add('drag-over-zone');
-  }
-
-  function unhighlightZone(idx) {
-    var z = document.getElementById('zone-' + idx);
-    if (z) z.classList.remove('drag-over-zone');
-  }
-
-  function dragStart(e, playerName) {
-    draggedPlayer = playerName;
-    e.dataTransfer.setData('text/plain', playerName);
-    setTimeout(function() {
-      var card = document.getElementById('card-' + playerName.replace(/[^a-z0-9]/gi, '_'));
-      if (card) card.classList.add('dragging');
-    }, 0);
-  }
-
-  function dragEnd(e) {
-    document.querySelectorAll('.player-card.dragging').forEach(function(c) {
-      c.classList.remove('dragging');
-    });
-  }
-
-  function findPlayer(name) {
-    for (var i = 0; i < allPlayers.length; i++) {
-      if (allPlayers[i].name === name) return allPlayers[i];
-    }
-    return null;
-  }
-
-  function removeFromFoursomes(name) {
-    foursomes.forEach(function(fs) {
-      fs.players = fs.players.filter(function(p) { return p.name !== name; });
-    });
-  }
-
-  function dropToFoursome(e, idx) {
-    e.preventDefault();
-    unhighlightZone(idx);
-    var name = e.dataTransfer.getData('text/plain');
-    if (!name) return;
-    var player = findPlayer(name);
-    if (!player) return;
-    var fs = foursomes[idx];
-    if (fs.players.length >= 4) { showToast('Foursome ' + (idx+1) + ' is full'); return; }
-    if (fs.players.some(function(p) { return p.name === name; })) return;
-    if (checkAvoidConflict(player, fs.players)) showToast('Avoid conflict detected');
-    removeFromFoursomes(name);
-    player.assigned = true;
-    fs.players.push(player);
-    render();
-  }
-
-  function dropToUnassigned(e) {
-    e.preventDefault();
-    var name = e.dataTransfer.getData('text/plain');
-    if (!name) return;
-    var player = findPlayer(name);
-    if (!player) return;
-    removeFromFoursomes(name);
-    player.assigned = false;
-    render();
-  }
-
-  function sendPairings() {
-    showToast('Sending pairings — coming soon!');
-  }
-    function init() {
-    var params = getParams();
-    eventId = params.event;
-
-    jsonpCall('getEvent', { eventId: eventId, player: 'organizer' }, function(data) {
-      if (data.event) {
-        document.getElementById('header-venue').textContent = data.event.venue || 'Golf Outing';
-        var d = new Date(eventId + 'T12:00:00');
-        var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-        var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-        document.getElementById('header-date').textContent =
-          days[d.getDay()] + ' ' + months[d.getMonth()] + ' ' + d.getDate();
-        startMinutes = parseTime(data.event.time);
-      }
-    });
-
-    jsonpCall('getConfirmed', { eventId: eventId }, function(data) {
-      if (data.error) {
-        showToast('Error: ' + data.error);
-        return;
-      }
-
-      allPlayers = (data.confirmed || []).map(function(p) {
-        return {
-          name: p.name,
-          walkRide: p.walkRide || 'No preference',
-          scoring: p.scoring || 'No Preference',
-          preferred: p.preferred || '',
-          avoid: p.avoid || '',
-          comments: p.comments || '',
-          assigned: false
-        };
-      });
-
-      var numFoursomes = Math.ceil(allPlayers.length / 4);
-      for (var i = 0; i < numFoursomes; i++) {
-        foursomes.push({ players: [] });
-      }
-
-      render();
-    });
-  }
-
-  window.addEventListener('load', function() {
-    setTimeout(init, 100);
+    html += '</div></div>';
   });
+  fsDiv.innerHTML = html;
+
+  var un = unassigned.length;
+  var hc = document.getElementById('hdr-count');
+  hc.textContent = un === 0 ? 'All assigned!' : un+' unassigned';
+  hc.className = 'header-count'+(un===0?' all-assigned':'');
+  document.getElementById('btn-send').disabled = un > 0;
+}
+
+function addFoursome() {
+  groups.push([]);
+  render();
+  toast('Foursome '+groups.length+' added');
+}
+
+function findPlayer(name) {
+  for (var i=0; i<players.length; i++) if (players[i].name===name) return players[i];
+  return null;
+}
+
+function removeFromGroups(name) {
+  groups = groups.map(function(g){
+    return g.filter(function(p){return p.name!==name;});
+  });
+}
+
+function onDragStart(e, name) {
+  dragging = name;
+  e.dataTransfer.setData('text', name);
+  setTimeout(function(){
+    var el = document.getElementById('c_'+name.replace(/[^a-z0-9]/gi,'_'));
+    if (el) el.classList.add('dragging');
+  }, 0);
+}
+
+function onDragEnd(e) {
+  document.querySelectorAll('.player-card.dragging').forEach(function(el){
+    el.classList.remove('dragging');
+  });
+}
+
+function onDragOver(e) { e.preventDefault(); }
+
+function onDropGroup(e, idx) {
+  e.preventDefault();
+  var name = e.dataTransfer.getData('text');
+  if (!name) return;
+  var p = findPlayer(name);
+  if (!p) return;
+  if (groups[idx].length >= 4) { toast('Foursome '+(idx+1)+' is full'); return; }
+  if (groups[idx].some(function(x){return x.name===name;})) return;
+  if (hasAvoid(p, groups[idx])) toast('Avoid conflict detected');
+  removeFromGroups(name);
+  p.assigned = true;
+  groups[idx].push(p);
+  render();
+}
+
+function onDropPool(e) {
+  e.preventDefault();
+  var name = e.dataTransfer.getData('text');
+  if (!name) return;
+  var p = findPlayer(name);
+  if (!p) return;
+  removeFromGroups(name);
+  p.assigned = false;
+  render();
+}
+
+function sendPairings() {
+  toast('Sending pairings — coming soon!');
+}
+
+function init() {
+  jsonp('getEvent', {eventId: eventId, player: 'organizer'}, function(data) {
+    if (data && data.event) {
+      document.getElementById('hdr-venue').textContent = data.event.venue || 'Golf Outing';
+      var d = new Date(eventId+'T12:00:00');
+      var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      document.getElementById('hdr-date').textContent =
+        days[d.getDay()]+' '+months[d.getMonth()]+' '+d.getDate();
+      startMin = parseTime(data.event.time);
+    }
+  });
+
+  jsonp('getConfirmed', {eventId: eventId}, function(data) {
+    if (data.error) { toast('Error: '+data.error); return; }
+
+    players = (data.confirmed||[]).map(function(p) {
+      return {
+        name: p.name,
+        walkRide: p.walkRide||'No preference',
+        scoring: p.scoring||'No Preference',
+        preferred: p.preferred||'',
+        avoid: p.avoid||'',
+        comments: p.comments||'',
+        assigned: false
+      };
+    });
+
+    var n = Math.ceil(players.length/4);
+    for (var i=0; i<n; i++) groups.push([]);
+
+    document.getElementById('spinner-wrap').style.display = 'none';
+    document.getElementById('main-ui').style.display = 'block';
+    render();
+  });
+}
+
+init();
 </script>
 </body>
 </html>
