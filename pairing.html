@@ -394,6 +394,10 @@
   }
 
   function renderUnassigned() {
+    var appEl = document.getElementById('app');
+    if (appEl) appEl.style.display = 'block';
+    var loadingEl = document.getElementById('loading');
+    if (loadingEl) loadingEl.style.display = 'none';
     var list = document.getElementById('unassigned-list');
     var unassigned = allPlayers.filter(function(p) { return !p.assigned; });
     if (unassigned.length === 0) {
@@ -561,15 +565,7 @@
         foursomes.push({ players: [] });
       }
 
-      var loadingEl = document.getElementById('loading');
-      var appEl = document.getElementById('app');
-      setTimeout(function() {
-        var loadingEl = document.getElementById('loading');
-        var appEl = document.getElementById('app');
-        if (loadingEl) loadingEl.style.display = 'none';
-        if (appEl) appEl.style.display = 'block';
-        render();
-      }, 50);
+      render();
     });
   }
 
