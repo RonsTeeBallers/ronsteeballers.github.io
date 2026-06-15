@@ -335,6 +335,9 @@ function render() {
     html += '<div class="foursome-block">';
     html += '<div class="foursome-hdr">';
     html += '<span class="fs-title">Foursome '+(idx+1)+'</span>';
+    if (grp.length === 0) {
+      html += '<button onclick="deleteFoursome('+idx+')" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;">Remove</button>';
+    }
     html += '<span class="fs-time">'+t+'</span>';
     html += '<span class="fs-count'+(full?' full':'')+'">'+(grp.length)+'/4</span>';
     html += '</div>';
