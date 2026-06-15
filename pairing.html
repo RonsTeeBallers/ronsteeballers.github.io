@@ -563,17 +563,19 @@
 
       var loadingEl = document.getElementById('loading');
       var appEl = document.getElementById('app');
-      if (loadingEl) loadingEl.style.display = 'none';
-      if (appEl) appEl.style.display = 'block';
-      render();
+      setTimeout(function() {
+        var loadingEl = document.getElementById('loading');
+        var appEl = document.getElementById('app');
+        if (loadingEl) loadingEl.style.display = 'none';
+        if (appEl) appEl.style.display = 'block';
+        render();
+      }, 50);
     });
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', init);
-  } else {
-    init();
-  }
+  window.addEventListener('load', function() {
+    setTimeout(init, 100);
+  });
 </script>
 </body>
 </html>
