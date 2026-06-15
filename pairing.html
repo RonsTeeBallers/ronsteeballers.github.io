@@ -424,18 +424,21 @@ function sendPairings() {
   var unassigned = players.filter(function(p){return !p.assigned;});
   if (unassigned.length > 0) { toast('All players must be assigned first'); return; }
 
-  var foursomeData = groups.map(function(grp) {
-    return grp.map(function(p) {
-      return { name: p.name, walkRide: p.walkRide };
-    });
-  });
-
   document.getElementById('btn-send').disabled = true;
   document.getElementById('btn-send').textContent = 'Sending...';
 
+  // Build a simple pipe-delimited string for each foursome
+  // Format: "Name1|WR1,Name2|WR2,Name3|WR3,Name4|WR4"
+  // Foursomes separated by semicolons
+  var fsStrings = groups.map(function(grp) {
+    return grp.map(function(p) {
+      return p.name + '|' + p.walkRide;
+    }).join(',');
+  }).join(';');
+
   jsonp('savePairings', {
     eventId: eventId,
-    foursomes: JSON.stringify(foursomeData)
+    foursomes: fsStrings
   }, function(data) {
     if (data.success) {
       toast('Pairings saved! Check Gmail Drafts.');
