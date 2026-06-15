@@ -462,6 +462,7 @@ jsonp('getEventInfo', {eventId: eventId}, function(data) {
       document.getElementById('hdr-date').textContent =
         days[d.getDay()]+' '+months[d.getMonth()]+' '+d.getDate();
       startMin = parseTime(data.event.time);
+      if (data.event.interval) interval = data.event.interval;
     }
   });
 
