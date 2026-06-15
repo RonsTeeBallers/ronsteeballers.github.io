@@ -561,8 +561,10 @@
         foursomes.push({ players: [] });
       }
 
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('app').style.display = 'block';
+      var loadingEl = document.getElementById('loading');
+      var appEl = document.getElementById('app');
+      if (loadingEl) loadingEl.style.display = 'none';
+      if (appEl) appEl.style.display = 'block';
       render();
     });
   }
