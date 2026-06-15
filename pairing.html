@@ -453,8 +453,7 @@ function sendPairings() {
   });
 }
 
-function init() {
-  jsonp('getEvent', {eventId: eventId, player: 'organizer'}, function(data) {
+jsonp('getEventInfo', {eventId: eventId}, function(data) {
     if (data && data.event) {
       document.getElementById('hdr-venue').textContent = data.event.venue || 'Golf Outing';
       var d = new Date(eventId+'T12:00:00');
