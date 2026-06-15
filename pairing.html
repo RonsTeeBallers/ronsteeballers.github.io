@@ -421,7 +421,33 @@ function onDropPool(e) {
 }
 
 function sendPairings() {
-  toast('Sending pairings — coming soon!');
+  var unassigned = players.filter(function(p){return !p.assigned;});
+  if (unassigned.length > 0) { toast('All players must be assigned first'); return; }
+
+  var foursomeData = groups.map(function(grp) {
+    return grp.map(function(p) {
+      return { name: p.name, walkRide: p.walkRide };
+    });
+  });
+
+  document.getElementById('btn-send').disabled = true;
+  document.getElementById('btn-send').textContent = 'Sending...';
+
+  jsonp('savePairings', {
+    eventId: eventId,
+    foursomes: JSON.stringify(foursomeData)
+  }, function(data) {
+    if (data.success) {
+      toast('Pairings saved! Check Gmail Drafts.');
+      setTimeout(function() {
+        window.location.href = 'organizer.html';
+      }, 2000);
+    } else {
+      toast('Error: ' + (data.error || 'Unknown error'));
+      document.getElementById('btn-send').disabled = false;
+      document.getElementById('btn-send').textContent = 'Send Pairings';
+    }
+  });
 }
 
 function init() {
