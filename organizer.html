@@ -85,7 +85,7 @@
 
     .btn {
       flex: 1;
-      min-width: 100px;
+      min-width: 80px;
       padding: 12px 8px;
       border-radius: 10px;
       font-size: 14px;
@@ -397,9 +397,9 @@
         html += '</div>';
         html += '<div class="progress-bar"><div class="' + fillClass + '" style="width:' + pct + '%"></div></div>';
         html += '<div class="event-actions">';
-        html += '<button class="btn btn-secondary" onclick="viewPlayers(\'' + event.id + '\')">Players</button>';
-        html += '<button class="btn btn-primary" onclick="goToPairing(\'' + event.id + '\')">Pair</button>';
-        html += '<button class="btn btn-success" onclick="sendPairings(\'' + event.id + '\')">Send</button>';
+        html += '<button class="btn btn-secondary" onclick="viewPlayers(\'' + event.id + '\')">👥 Players</button>';
+        html += '<button class="btn btn-primary" onclick="goToPairing(\'' + event.id + '\')">⛳ Pair</button>';
+        html += '<button class="btn btn-success" onclick="sendPairings(\'' + event.id + '\')">📧 Email</button>';
         html += '</div>';
         html += '</div>';
       });
