@@ -217,8 +217,8 @@
 
 <div class="toast" id="toast"></div>
 <script>
-var BACKEND = 'https://script.google.com/macros/s/AKfycbwx6NA3WyYC8TpEe0bDInd7vTGeBItel5dYWvvJvP1KyIlnFpx6Ttb8PnK4fIoeuQM';
-var eventId = new URLSearchParams(window.location.search).get('event') || '';
+var BACKEND = 'https://script.google.com/macros/s/AKfycbwx6NA3WyYC8TpEe0bDInd7vTGeBItel5dYWvvJvP1KyIlnFpx6Ttb8PnK4fIoeuQM/exec';
+var eventId = '';
 var players = [];
 var groups = [];
 var startMin = 660;
@@ -300,21 +300,20 @@ function hasAvoid(player, members) {
   }
   return false;
 }
-
 function cardHTML(p, gIdx) {
-  var avoid = (gIdx!==null && gIdx!==undefined && groups[gIdx])
-    ? hasAvoid(p, groups[gIdx].filter(function(x){return x.name!==p.name;}))
+  var avoid = (gIdx !== null && gIdx !== undefined && groups[gIdx])
+    ? hasAvoid(p, groups[gIdx].filter(function(x){ return x.name !== p.name; }))
     : false;
-  var id = 'c_'+p.name.replace(/[^a-z0-9]/gi,'_');
-  var h = '<div class="player-card '+scoreCls(p.scoring)+'" id="'+id+'" draggable="true" ';
-  h += 'ondragstart="onDragStart(event,\''+p.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\''+')" ';
+  var id = 'c_' + p.name.replace(/[^a-z0-9]/gi, '_');
+  var h = '<div class="player-card ' + scoreCls(p.scoring) + '" id="' + id + '" draggable="true" ';
+  h += 'ondragstart="onDragStart(event,\'' + p.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'") + '\')" ';
   h += 'ondragend="onDragEnd(event)">';
-  h += '<div class="card-name">'+p.name+'</div>';
-  h += '<div class="card-tags">'+wrTag(p.walkRide)+scoreTag(p.scoring);
+  h += '<div class="card-name">' + p.name + '</div>';
+  h += '<div class="card-tags">' + wrTag(p.walkRide) + scoreTag(p.scoring);
   if (avoid) h += '<span class="tag ta">Avoid</span>';
   h += '</div>';
-  if (p.preferred) h += '<div class="card-pref">Prefers: '+p.preferred+'</div>';
-  if (p.comments) h += '<div class="card-note">'+p.comments+'</div>';
+  if (p.preferred) h += '<div class="card-pref">Prefers: ' + p.preferred + '</div>';
+  if (p.comments) h += '<div class="card-note">' + p.comments + '</div>';
   h += '</div>';
   return h;
 }
@@ -322,32 +321,32 @@ function cardHTML(p, gIdx) {
 function render() {
   var pool = document.getElementById('pool');
   var fsDiv = document.getElementById('foursomes');
-  var unassigned = players.filter(function(p){return !p.assigned;});
+  var unassigned = players.filter(function(p){ return !p.assigned; });
 
   pool.innerHTML = unassigned.length === 0
     ? '<div style="text-align:center;padding:16px;color:#aab7c4;font-size:12px;">All assigned!</div>'
-    : unassigned.map(function(p){return cardHTML(p,null);}).join('');
+    : unassigned.map(function(p){ return cardHTML(p, null); }).join('');
 
   var html = '';
   groups.forEach(function(grp, idx) {
-    var t = fmtTime(startMin + idx*interval);
+    var t = fmtTime(startMin + idx * interval);
     var full = grp.length >= 4;
     html += '<div class="foursome-block">';
     html += '<div class="foursome-hdr">';
-    html += '<span class="fs-title">Foursome '+(idx+1)+'</span>';
+    html += '<span class="fs-title">Foursome ' + (idx+1) + '</span>';
+    html += '<span class="fs-time">' + t + '</span>';
     if (grp.length === 0) {
-      html += '<button onclick="deleteFoursome('+idx+')" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;">Remove</button>';
+      html += '<button onclick="deleteFoursome(' + idx + ')" style="background:rgba(255,255,255,0.2);border:none;color:white;border-radius:6px;padding:2px 8px;font-size:12px;cursor:pointer;">Remove</button>';
     }
-    html += '<span class="fs-time">'+t+'</span>';
-    html += '<span class="fs-count'+(full?' full':'')+'">'+(grp.length)+'/4</span>';
+    html += '<span class="fs-count' + (full?' full':'') + '">' + grp.length + '/4</span>';
     html += '</div>';
-    html += '<div class="foursome-body" ondragover="onDragOver(event)" ondrop="onDropGroup(event,'+idx+')">';
-    html += grp.map(function(p){return cardHTML(p,idx);}).join('');
+    html += '<div class="foursome-body" ondragover="onDragOver(event)" ondrop="onDropGroup(event,' + idx + ')">';
+    html += grp.map(function(p){ return cardHTML(p, idx); }).join('');
     if (!full) {
-      html += '<div class="drop-hint" id="dh'+idx+'" ';
+      html += '<div class="drop-hint" id="dh' + idx + '" ';
       html += 'ondragover="onDragOver(event);this.classList.add(\'over\')" ';
       html += 'ondragleave="this.classList.remove(\'over\')" ';
-      html += 'ondrop="onDropGroup(event,'+idx+')">Drop player here</div>';
+      html += 'ondrop="onDropGroup(event,' + idx + ')">Drop player here</div>';
     }
     html += '</div></div>';
   });
@@ -355,15 +354,22 @@ function render() {
 
   var un = unassigned.length;
   var hc = document.getElementById('hdr-count');
-  hc.textContent = un === 0 ? 'All assigned!' : un+' unassigned';
-  hc.className = 'header-count'+(un===0?' all-assigned':'');
+  hc.textContent = un === 0 ? 'All assigned!' : un + ' unassigned';
+  hc.className = 'header-count' + (un === 0 ? ' all-assigned' : '');
   document.getElementById('btn-send').disabled = un > 0;
 }
 
 function addFoursome() {
   groups.push([]);
   render();
-  toast('Foursome '+groups.length+' added');
+  toast('Foursome ' + groups.length + ' added');
+}
+
+function deleteFoursome(idx) {
+  if (groups[idx].length > 0) { toast('Move players out first'); return; }
+  groups.splice(idx, 1);
+  render();
+  toast('Foursome removed');
 }
 
 function findPlayer(name) {
@@ -373,7 +379,7 @@ function findPlayer(name) {
 
 function removeFromGroups(name) {
   groups = groups.map(function(g){
-    return g.filter(function(p){return p.name!==name;});
+    return g.filter(function(p){ return p.name !== name; });
   });
 }
 
@@ -381,7 +387,7 @@ function onDragStart(e, name) {
   dragging = name;
   e.dataTransfer.setData('text', name);
   setTimeout(function(){
-    var el = document.getElementById('c_'+name.replace(/[^a-z0-9]/gi,'_'));
+    var el = document.getElementById('c_' + name.replace(/[^a-z0-9]/gi, '_'));
     if (el) el.classList.add('dragging');
   }, 0);
 }
@@ -400,8 +406,8 @@ function onDropGroup(e, idx) {
   if (!name) return;
   var p = findPlayer(name);
   if (!p) return;
-  if (groups[idx].length >= 4) { toast('Foursome '+(idx+1)+' is full'); return; }
-  if (groups[idx].some(function(x){return x.name===name;})) return;
+  if (groups[idx].length >= 4) { toast('Foursome ' + (idx+1) + ' is full'); return; }
+  if (groups[idx].some(function(x){ return x.name === name; })) return;
   if (hasAvoid(p, groups[idx])) toast('Avoid conflict detected');
   removeFromGroups(name);
   p.assigned = true;
@@ -421,15 +427,12 @@ function onDropPool(e) {
 }
 
 function sendPairings() {
-  var unassigned = players.filter(function(p){return !p.assigned;});
+  var unassigned = players.filter(function(p){ return !p.assigned; });
   if (unassigned.length > 0) { toast('All players must be assigned first'); return; }
 
   document.getElementById('btn-send').disabled = true;
   document.getElementById('btn-send').textContent = 'Sending...';
 
-  // Build a simple pipe-delimited string for each foursome
-  // Format: "Name1|WR1,Name2|WR2,Name3|WR3,Name4|WR4"
-  // Foursomes separated by semicolons
   var fsStrings = groups.map(function(grp) {
     return grp.map(function(p) {
       return p.name + '|' + p.walkRide;
@@ -452,37 +455,39 @@ function sendPairings() {
     }
   });
 }
+function init() {
+  eventId = new URLSearchParams(window.location.search).get('event') || '';
 
-jsonp('getEventInfo', {eventId: eventId}, function(data) {
+  jsonp('getEventInfo', {eventId: eventId}, function(data) {
     if (data && data.event) {
       document.getElementById('hdr-venue').textContent = data.event.venue || 'Golf Outing';
-      var d = new Date(eventId+'T12:00:00');
-      var days=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-      var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      var d = new Date(eventId + 'T12:00:00');
+      var days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
       document.getElementById('hdr-date').textContent =
-        days[d.getDay()]+' '+months[d.getMonth()]+' '+d.getDate();
+        days[d.getDay()] + ' ' + months[d.getMonth()] + ' ' + d.getDate();
       startMin = parseTime(data.event.time);
       if (data.event.interval) interval = data.event.interval;
     }
   });
 
   jsonp('getConfirmed', {eventId: eventId}, function(data) {
-    if (data.error) { toast('Error: '+data.error); return; }
+    if (data.error) { toast('Error: ' + data.error); return; }
 
-    players = (data.confirmed||[]).map(function(p) {
+    players = (data.confirmed || []).map(function(p) {
       return {
         name: p.name,
-        walkRide: p.walkRide||'No preference',
-        scoring: p.scoring||'No Preference',
-        preferred: p.preferred||'',
-        avoid: p.avoid||'',
-        comments: p.comments||'',
+        walkRide: p.walkRide || 'No preference',
+        scoring: p.scoring || 'No Preference',
+        preferred: p.preferred || '',
+        avoid: p.avoid || '',
+        comments: p.comments || '',
         assigned: false
       };
     });
 
-    var n = Math.ceil(players.length/4);
-    for (var i=0; i<n; i++) groups.push([]);
+    var n = Math.ceil(players.length / 4);
+    for (var i = 0; i < n; i++) groups.push([]);
 
     document.getElementById('spinner-wrap').style.display = 'none';
     document.getElementById('main-ui').style.display = 'block';
@@ -492,5 +497,7 @@ jsonp('getEventInfo', {eventId: eventId}, function(data) {
 
 init();
 </script>
+</body>
+</html>
 </body>
 </html>
