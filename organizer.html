@@ -366,7 +366,15 @@
   }
 
   function loadEvents() {
+    var timeout = setTimeout(function() {
+      document.getElementById('loading').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      document.getElementById('events-container').innerHTML =
+        '<div class="empty-events"><div class="icon">⚠️</div><p>Could not load events.<br>Check your connection and refresh.</p></div>';
+    }, 8000);
+
     jsonpCall('getOpenEvents', {}, function(data) {
+      clearTimeout(timeout);
       document.getElementById('loading').style.display = 'none';
       document.getElementById('app').style.display = 'block';
 
