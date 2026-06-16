@@ -272,17 +272,17 @@
   </div>
 </div>
 <script>
-  const BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzEaTmg0sFydJOb3tNZAzdboXNCdsA7a3sraJFgJph8xGcxbMZJfdrrgDibXmsgdY7c/exec';
-  const SIGNUP_LIST_URL = 'https://ronsteeballers.github.io/signup.html';
+  var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbzEaTmg0sFydJOb3tNZAzdboXNCdsA7a3sraJFgJph8xGcxbMZJfdrrgDibXmsgdY7c/exec';
+  var SIGNUP_LIST_URL = 'https://ronsteeballers.github.io/signup.html';
 
-  let playerName = '';
-  let playerFirst = '';
-  let eventId = '';
-  let playingChoice = '';
-  let walkRideChoice = '';
+  var playerName = '';
+  var playerFirst = '';
+  var eventId = '';
+  var playingChoice = '';
+  var walkRideChoice = '';
 
   function getParams() {
-    const params = new URLSearchParams(window.location.search);
+    var params = new URLSearchParams(window.location.search);
     return {
       event: params.get('event') || '',
       player: params.get('player') || ''
@@ -291,55 +291,50 @@
 
   function formatDate(dateStr) {
     if (!dateStr) return '';
-    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const months = ['January','February','March','April','May','June',
-                    'July','August','September','October','November','December'];
-    const d = new Date(dateStr + 'T12:00:00');
-    return `${days[d.getDay()]}, ${months[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`;
+    var days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+    var months = ['January','February','March','April','May','June',
+                  'July','August','September','October','November','December'];
+    var d = new Date(dateStr + 'T12:00:00');
+    return days[d.getDay()] + ', ' + months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
   }
 
-  function getDemoData(playerSlug) {
-    const playerNames = {
-      'cecil-mark': { first: 'Mark', last: 'Cecil', full: 'Cecil, Mark' },
-      'blanton-ron': { first: 'Ron', last: 'Blanton', full: 'Blanton, Ron' },
-      'test-player': { first: 'Test', last: 'Player', full: 'Player, Test' }
-    };
-    const player = playerNames[playerSlug] || { first: 'Golfer', last: '', full: playerSlug };
-    return {
-      player: player,
-      event: {
-        title: 'Golf Outing — Demo',
-        date: '2026-06-19',
-        venue: 'River Bend Golf Course',
-        venueUrl: '',
-        time: '11:15 AM',
-        slots: '5 tee times reserved',
-        greenFee: '$28.00',
-        cartFee: '$16.00',
-        total: '$44.00',
-        notes: '',
-        signupListUrl: SIGNUP_LIST_URL
-      }
-    };
+  function showError(msg) {
+    var el = document.getElementById('error-msg');
+    el.textContent = msg;
+    el.classList.remove('hidden');
   }
 
-  async function loadEventData(eventId, playerSlug) {
-    try {
-      const response = await fetch(
-        `${BACKEND_URL}?action=getEvent&eventId=${encodeURIComponent(eventId)}&player=${encodeURIComponent(playerSlug)}`
-      );
-      const data = await response.json();
-      if (data.error) {
-        console.log('Backend error:', data.error, '— using demo data');
-        return getDemoData(playerSlug);
-      }
-      return data;
-    } catch (e) {
-      console.log('Backend unavailable — using demo data');
-      return getDemoData(playerSlug);
+  function jsonpCall(action, params, callback) {
+    var fnName = 'cb_' + action.replace(/[^a-z]/gi,'_') + '_' + Date.now();
+    window[fnName] = callback;
+    var url = BACKEND_URL + '?action=' + action + '&callback=' + fnName;
+    for (var k in params) {
+      url += '&' + k + '=' + encodeURIComponent(params[k]);
     }
+    var s = document.createElement('script');
+    s.src = url;
+    document.head.appendChild(s);
   }
 
+  function selectPlaying(choice) {
+    playingChoice = choice;
+    document.getElementById('btn-yes').className = 'btn-choice' + (choice === 'yes' ? ' selected-yes' : '');
+    document.getElementById('btn-no').className = 'btn-choice' + (choice === 'no' ? ' selected-no' : '');
+    if (choice === 'yes') {
+      document.getElementById('yes-section').classList.remove('hidden');
+    } else {
+      document.getElementById('yes-section').classList.add('hidden');
+      walkRideChoice = '';
+    }
+    document.getElementById('btn-submit').classList.remove('hidden');
+  }
+
+  function selectWalkRide(choice) {
+    walkRideChoice = choice;
+    document.getElementById('btn-walk').className = 'btn-choice' + (choice === 'walk' ? ' selected-walk' : '');
+    document.getElementById('btn-ride').className = 'btn-choice' + (choice === 'ride' ? ' selected-ride' : '');
+    document.getElementById('btn-nopref').className = 'btn-choice' + (choice === 'nopref' ? ' selected-nopref' : '');
+  }
   function submitRSVP() {
     if (!playingChoice) {
       showError('Please select Yes or No.');
@@ -374,84 +369,62 @@
       + '&walkRide=' + encodeURIComponent(walkRideMap[walkRideChoice] || '')
       + '&comments=' + encodeURIComponent(document.getElementById('comments').value || '');
 
-    var script = document.createElement('script');
-    script.src = url;
-    document.head.appendChild(script);
+    var s = document.createElement('script');
+    s.src = url;
+    document.head.appendChild(s);
   }
+  function init() {
+    var p = getParams();
+    eventId = p.event;
+    var playerSlug = p.player;
 
-  function selectPlaying(choice) {
-    playingChoice = choice;
-    document.getElementById('btn-yes').className = 'btn-choice' + (choice === 'yes' ? ' selected-yes' : '');
-    document.getElementById('btn-no').className = 'btn-choice' + (choice === 'no' ? ' selected-no' : '');
+    jsonpCall('getEvent', {eventId: eventId, player: playerSlug}, function(data) {
+      if (data.error) {
+        document.getElementById('loading').classList.remove('hidden');
+        document.getElementById('loading').textContent = 'Event not found.';
+        return;
+      }
 
-    if (choice === 'yes') {
-      document.getElementById('yes-section').classList.remove('hidden');
-    } else {
-      document.getElementById('yes-section').classList.add('hidden');
-      walkRideChoice = '';
-    }
-    document.getElementById('btn-submit').classList.remove('hidden');
+      playerFirst = data.player.first;
+      playerName = data.player.full;
+
+      document.getElementById('event-title').textContent = data.event.title || 'Golf Outing';
+      document.getElementById('event-date').textContent = formatDate(data.event.date);
+
+      if (data.event.venueUrl) {
+        document.getElementById('event-venue').innerHTML =
+          '<a href="' + data.event.venueUrl + '" target="_blank">' + data.event.venue + '</a>';
+      } else {
+        document.getElementById('event-venue').textContent = data.event.venue;
+      }
+
+      document.getElementById('event-time').textContent = data.event.time;
+      document.getElementById('event-slots').textContent = data.event.slots;
+
+      if (data.event.total) {
+        document.getElementById('event-fee').innerHTML =
+          'Green Fee ' + data.event.greenFee +
+          ' + Cart ' + data.event.cartFee +
+          ' = <span class="fee-total">' + data.event.total + '</span>';
+      } else {
+        document.getElementById('fee-row').classList.add('hidden');
+      }
+
+      if (data.event.notes) {
+        document.getElementById('event-notes').textContent = data.event.notes;
+        document.getElementById('event-notes-container').classList.remove('hidden');
+      }
+
+      document.getElementById('signup-list-link').href = SIGNUP_LIST_URL + '?event=' + eventId;
+      document.getElementById('greeting').textContent = 'Hi ' + playerFirst + '!';
+
+      document.getElementById('loading').classList.add('hidden');
+      document.getElementById('app').classList.remove('hidden');
+    });
   }
-
-  function selectWalkRide(choice) {
-    walkRideChoice = choice;
-    document.getElementById('btn-walk').className = 'btn-choice' + (choice === 'walk' ? ' selected-walk' : '');
-    document.getElementById('btn-ride').className = 'btn-choice' + (choice === 'ride' ? ' selected-ride' : '');
-    document.getElementById('btn-nopref').className = 'btn-choice' + (choice === 'nopref' ? ' selected-nopref' : '');
-  }
-
-  function showError(msg) {
-    const el = document.getElementById('error-msg');
-    el.textContent = msg;
-    el.classList.remove('hidden');
-  }
-
-  async function submitRSVP() {
-    if (!playingChoice) {
-      showError('Please select Yes or No.');
-      return;
-    }
-
-    const btn = document.getElementById('btn-submit');
-    btn.disabled = true;
-    btn.textContent = 'Submitting...';
-
-    const walkRideMap = { walk: 'Walk', ride: 'Ride', nopref: 'No preference', '': '' };
-    const payload = {
-      action: 'submitRSVP',
-      eventId: eventId,
-      playerName: playerName,
-      playing: playingChoice === 'yes' ? 'Yes' : 'No',
-      walkRide: walkRideMap[walkRideChoice] || '',
-      comments: document.getElementById('comments').value || '',
-      timestamp: new Date().toISOString()
-    };
-
-    try {
-      await fetch(BACKEND_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-    } catch (e) {
-      console.log('Submit error:', e);
-    }
-
-    document.getElementById('form-section').classList.add('hidden');
-    document.getElementById('confirmation-section').classList.remove('hidden');
-
-    if (playingChoice === 'yes') {
-      document.getElementById('confirmation-yes').classList.remove('hidden');
-      document.getElementById('confirmation-no').classList.add('hidden');
-    } else {
-      document.getElementById('confirmation-yes').classList.add('hidden');
-      document.getElementById('confirmation-no').classList.remove('hidden');
-    }
-  }
-}
-
-init();
+  init();
 </script>
+</body>
+</html>
 </body>
 </html>
