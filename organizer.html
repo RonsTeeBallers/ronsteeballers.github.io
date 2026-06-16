@@ -362,7 +362,8 @@
 
     var script = document.createElement('script');
     script.src = url;
-    document.body.appendChild(script);
+    script.crossOrigin = 'anonymous';
+    document.head.appendChild(script);
   }
 
   function loadEvents() {
