@@ -340,41 +340,43 @@
     }
   }
 
-  async function init() {
-    const { event, player } = getParams();
-    eventId = event;
-
-    const data = await loadEventData(event, player);
-    if (!data) return;
-
-    playerFirst = data.player.first;
-    playerName = data.player.full;
-
-    document.getElementById('event-title').textContent = data.event.title || 'Golf Outing';
-    document.getElementById('event-date').textContent = formatDate(data.event.date);
-    document.getElementById('event-venue').innerHTML = data.event.venueUrl
-      ? `<a href="${data.event.venueUrl}" target="_blank">${data.event.venue}</a>`
-      : data.event.venue;
-    document.getElementById('event-time').textContent = data.event.time;
-    document.getElementById('event-slots').textContent = data.event.slots;
-
-    if (data.event.total) {
-      document.getElementById('event-fee').innerHTML =
-        `Green Fee ${data.event.greenFee} + Cart ${data.event.cartFee} = <span class="fee-total">${data.event.total}</span>`;
-    } else {
-      document.getElementById('fee-row').classList.add('hidden');
+  function submitRSVP() {
+    if (!playingChoice) {
+      showError('Please select Yes or No.');
+      return;
     }
 
-    if (data.event.notes) {
-      document.getElementById('event-notes').textContent = data.event.notes;
-      document.getElementById('event-notes-container').classList.remove('hidden');
-    }
+    var btn = document.getElementById('btn-submit');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
 
-    document.getElementById('signup-list-link').href = 'https://ronsteeballers.github.io/signup.html?event=' + eventId;
-    document.getElementById('greeting').textContent = `Hi ${playerFirst}!`;
+    var walkRideMap = { walk: 'Walk', ride: 'Ride', nopref: 'No preference', '': '' };
 
-    document.getElementById('loading').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
+    var fnName = 'cb_submit_' + Date.now();
+    window[fnName] = function(data) {
+      document.getElementById('form-section').classList.add('hidden');
+      document.getElementById('confirmation-section').classList.remove('hidden');
+      if (playingChoice === 'yes') {
+        document.getElementById('confirmation-yes').classList.remove('hidden');
+        document.getElementById('confirmation-no').classList.add('hidden');
+      } else {
+        document.getElementById('confirmation-yes').classList.add('hidden');
+        document.getElementById('confirmation-no').classList.remove('hidden');
+      }
+    };
+
+    var url = BACKEND_URL
+      + '?action=submitRSVP'
+      + '&callback=' + fnName
+      + '&eventId=' + encodeURIComponent(eventId)
+      + '&playerName=' + encodeURIComponent(playerName)
+      + '&playing=' + encodeURIComponent(playingChoice === 'yes' ? 'Yes' : 'No')
+      + '&walkRide=' + encodeURIComponent(walkRideMap[walkRideChoice] || '')
+      + '&comments=' + encodeURIComponent(document.getElementById('comments').value || '');
+
+    var script = document.createElement('script');
+    script.src = url;
+    document.head.appendChild(script);
   }
 
   function selectPlaying(choice) {
