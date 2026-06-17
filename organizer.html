@@ -278,6 +278,25 @@
   <div class="bottom-spacer"></div>
 </div>
 
+  <!-- Invite Preview Modal -->
+<div class="modal-overlay" id="invite-modal">
+  <div class="modal">
+    <h2>Send Invite</h2>
+    <div id="invite-details" style="background:#eaf2ff;padding:12px;border-radius:8px;margin-bottom:16px;font-size:14px;color:#1a2332;"></div>
+    <div class="form-group">
+      <label class="form-label">Optional Weekly Comment</label>
+      <input type="text" class="form-input" id="invite-comment" placeholder="e.g. Cart path only this week due to rain...">
+    </div>
+    <div class="form-group">
+      <label class="form-label" style="color:#5d6d7e;font-size:11px;">Sending to: <span id="invite-mailing-list"></span></label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideInvitePreview()">Cancel</button>
+      <button class="btn btn-primary" id="btn-send-invite" onclick="sendInvites()">Send Invites</button>
+    </div>
+  </div>
+</div>
+  
 <!-- Create Event Modal -->
 <div class="modal-overlay" id="create-modal">
   <div class="modal">
@@ -405,9 +424,10 @@
         html += '</div>';
         html += '<div class="progress-bar"><div class="' + fillClass + '" style="width:' + pct + '%"></div></div>';
         html += '<div class="event-actions">';
-        html += '<button class="btn btn-secondary" onclick="viewPlayers(\'' + event.id + '\')">👥 Players</button>';
-        html += '<button class="btn btn-primary" onclick="goToPairing(\'' + event.id + '\')">⛳ Pair</button>';
-        html += '<button class="btn btn-success" onclick="sendPairings(\'' + event.id + '\')">📧 Email</button>';
+        html += '<button class="btn btn-secondary" onclick="viewPlayers(\'' + event.id + '\')">Players</button>';
+        html += '<button class="btn btn-primary" onclick="showInvitePreview(\'' + event.id + '\',\'' + event.venue + '\',\'' + event.mailingList + '\')">Invite</button>';
+        html += '<button class="btn btn-primary" onclick="goToPairing(\'' + event.id + '\')">Pair</button>';
+        html += '<button class="btn btn-success" onclick="sendPairings(\'' + event.id + '\')">Email</button>';
         html += '</div>';
         html += '</div>';
       });
@@ -426,7 +446,46 @@ function viewPlayers(eventId) {
   function sendPairings(eventId) {
     showToast('Pairings email coming soon...');
   }
+  
+  var currentInviteEventId = '';
+  var currentMailingList = '';
 
+  function showInvitePreview(eventId, venue, mailingList) {
+    currentInviteEventId = eventId;
+    currentMailingList = mailingList;
+    document.getElementById('invite-comment').value = '';
+    document.getElementById('invite-details').textContent =
+      venue + ' — ' + formatDate(eventId);
+    document.getElementById('invite-mailing-list').textContent = mailingList;
+    document.getElementById('btn-send-invite').disabled = false;
+    document.getElementById('btn-send-invite').textContent = 'Send Invites';
+    document.getElementById('invite-modal').classList.add('show');
+  }
+
+  function hideInvitePreview() {
+    document.getElementById('invite-modal').classList.remove('show');
+  }
+
+  function sendInvites() {
+    var comment = document.getElementById('invite-comment').value || '';
+    var btn = document.getElementById('btn-send-invite');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+
+    jsonpCall('sendInviteEmails', {
+      eventId: currentInviteEventId,
+      mailingList: currentMailingList,
+      comment: comment
+    }, function(data) {
+      hideInvitePreview();
+      if (data.success) {
+        showToast('Sent ' + data.sent + ' invites successfully!');
+      } else {
+        showToast('Error: ' + (data.error || 'Unknown error'));
+      }
+    });
+  }
+  
   function showCreateEvent() {
     loadVenues();
     document.getElementById('create-modal').classList.add('show');
