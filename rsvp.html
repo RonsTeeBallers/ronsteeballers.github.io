@@ -94,7 +94,8 @@
     .btn-choice.selected-no { background: #922b21; border-color: #922b21; color: white; }
     .btn-choice.selected-walk,
     .btn-choice.selected-ride,
-    .btn-choice.selected-nopref { background: #1a5276; border-color: #1a5276; color: white; }
+    .btn-choice.selected-nopref,
+    .btn-choice.selected-score { background: #1a5276; border-color: #1a5276; color: white; }
 
     .section { margin-bottom: 24px; }
     .section-label {
@@ -248,6 +249,14 @@
         </div>
       </div>
       <div class="section">
+        <div class="section-label">Scoring Preference?</div>
+        <div class="btn-group-3">
+          <button class="btn-choice" id="btn-ownball" onclick="selectScoring('ownball')">Own Ball</button>
+          <button class="btn-choice" id="btn-scramble" onclick="selectScoring('scramble')">Scramble</button>
+          <button class="btn-choice" id="btn-scorepref" onclick="selectScoring('nopref')">No Pref</button>
+        </div>
+      </div>
+      <div class="section">
         <div class="section-label">Comments / Guests (optional)</div>
         <textarea id="comments" placeholder="Guest names, special requests, anything else..."></textarea>
       </div>
@@ -280,6 +289,7 @@
   var eventId = '';
   var playingChoice = '';
   var walkRideChoice = '';
+  var scoringChoice = '';
 
   function getParams() {
     var params = new URLSearchParams(window.location.search);
@@ -325,6 +335,7 @@
     } else {
       document.getElementById('yes-section').classList.add('hidden');
       walkRideChoice = '';
+      scoringChoice = '';
     }
     document.getElementById('btn-submit').classList.remove('hidden');
   }
@@ -334,6 +345,13 @@
     document.getElementById('btn-walk').className = 'btn-choice' + (choice === 'walk' ? ' selected-walk' : '');
     document.getElementById('btn-ride').className = 'btn-choice' + (choice === 'ride' ? ' selected-ride' : '');
     document.getElementById('btn-nopref').className = 'btn-choice' + (choice === 'nopref' ? ' selected-nopref' : '');
+  }
+
+  function selectScoring(choice) {
+    scoringChoice = choice;
+    document.getElementById('btn-ownball').className = 'btn-choice' + (choice === 'ownball' ? ' selected-score' : '');
+    document.getElementById('btn-scramble').className = 'btn-choice' + (choice === 'scramble' ? ' selected-score' : '');
+    document.getElementById('btn-scorepref').className = 'btn-choice' + (choice === 'nopref' ? ' selected-score' : '');
   }
   function submitRSVP() {
     if (!playingChoice) {
@@ -346,6 +364,7 @@
     btn.textContent = 'Submitting...';
 
     var walkRideMap = { walk: 'Walk', ride: 'Ride', nopref: 'No preference', '': '' };
+    var scoringMap = { ownball: 'Own Ball', scramble: 'Scramble', nopref: 'No Preference', '': '' };
 
     var fnName = 'cb_submit_' + Date.now();
     window[fnName] = function(data) {
@@ -367,6 +386,7 @@
       + '&playerName=' + encodeURIComponent(playerName)
       + '&playing=' + encodeURIComponent(playingChoice === 'yes' ? 'Yes' : 'No')
       + '&walkRide=' + encodeURIComponent(walkRideMap[walkRideChoice] || '')
+      + '&scoring=' + encodeURIComponent(scoringMap[scoringChoice] || '')
       + '&comments=' + encodeURIComponent(document.getElementById('comments').value || '');
 
     var s = document.createElement('script');

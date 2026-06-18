@@ -284,12 +284,10 @@ function getConfirmedPlayers(eventId) {
     }
 
     var playersData = playersSheet.getDataRange().getValues();
-    var scoringMap = {};
     var preferredMap = {};
     var avoidMap = {};
     for (var i = 1; i < playersData.length; i++) {
       var name = playersData[i][0].toString().trim();
-      scoringMap[name] = playersData[i][9] ? playersData[i][9].toString().trim() : 'No Preference';
       preferredMap[name] = playersData[i][7] ? playersData[i][7].toString().trim() : '';
       avoidMap[name] = playersData[i][8] ? playersData[i][8].toString().trim() : '';
     }
@@ -313,7 +311,8 @@ function getConfirmedPlayers(eventId) {
         responseMap[name] = {
           playing: response,
           walkRide: walkRide || 'No preference',
-          comments: formData[i][4] ? formData[i][4].toString().trim() : ''
+          comments: formData[i][4] ? formData[i][4].toString().trim() : '',
+          scoring: formData[i][6] ? formData[i][6].toString().trim() : 'No Preference'
         };
       }
     }
@@ -325,7 +324,7 @@ function getConfirmedPlayers(eventId) {
           name: name,
           walkRide: responseMap[name].walkRide,
           comments: responseMap[name].comments || '',
-          scoring: scoringMap[name] || 'No Preference',
+          scoring: responseMap[name].scoring || 'No Preference',
           preferred: preferredMap[name] || '',
           avoid: avoidMap[name] || ''
         });
@@ -871,7 +870,8 @@ function submitRSVP(params) {
       params.playing || '',
       params.walkRide || '',
       params.comments || '',
-      params.eventId || ''
+      params.eventId || '',
+      params.scoring || ''
     ];
 
     var nextRow = formSheet.getLastRow() + 1;
