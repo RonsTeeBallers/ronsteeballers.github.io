@@ -18,6 +18,8 @@ function doGet(e) {
     result = savePairings(params);
   } else if (action === 'getEventInfo') {
     result = getEventInfo(params.eventId);
+  } else if (action === 'getStats') {
+    result = getStats();
   } else if (action === 'sendInviteEmails') {
     result = sendInviteEmails(params);
   } else if (action === 'submitRSVP') {
@@ -614,6 +616,161 @@ function testBrevoSend() {
     '<p style="margin:0;padding-left:20px;">Test Player (Walk)</p>'
   );
   Logger.log(JSON.stringify(result));
+}
+
+// Organizer statistics, computed from Pairing History + Players + Form Responses.
+function getStats() {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var historySheet = ss.getSheetByName('Pairing History');
+    var playersSheet = ss.getSheetByName('Players');
+    var formSheet = ss.getSheetByName('Form Responses');
+
+    // ---------- Pairing History: rounds, partners, courses, outings ----------
+    var histData = historySheet ? historySheet.getDataRange().getValues() : [];
+    var hStart = 0;
+    if (histData.length > 0) {
+      var hHead = histData[0].join(' ').toLowerCase();
+      if (hHead.indexOf('player') !== -1 || hHead.indexOf('date') !== -1 || hHead.indexOf('course') !== -1) {
+        hStart = 1;
+      }
+    }
+
+    var roundsByKey = {};    // nameKey -> rounds count
+    var displayByKey = {};   // nameKey -> display name (First Last)
+    var partnerCounts = {};  // nameKey -> { partnerKey: count }
+    var outingDates = {};     // dateStr -> true
+    var courseRounds = {};    // course -> player-rounds
+    var courseOutings = {};   // course -> { dateStr: true }
+    var totalRounds = 0;
+
+    for (var r = hStart; r < histData.length; r++) {
+      var hrow = histData[r];
+      if (!hrow || hrow.length < 2) continue;
+      var dateStr = (hrow[0] || '').toString().trim();
+      var course = (hrow[hrow.length - 1] || '').toString().trim();
+
+      var names = [];
+      for (var c = 1; c <= hrow.length - 2; c++) {
+        var nm = (hrow[c] || '').toString().trim();
+        if (nm !== '') names.push(nm);
+      }
+      if (names.length === 0) continue;
+
+      if (dateStr) outingDates[dateStr] = true;
+      if (course) {
+        courseRounds[course] = (courseRounds[course] || 0) + names.length;
+        if (!courseOutings[course]) courseOutings[course] = {};
+        if (dateStr) courseOutings[course][dateStr] = true;
+      }
+
+      var keys = names.map(function(n) { return n.toLowerCase(); });
+      names.forEach(function(n, idx) {
+        var k = keys[idx];
+        roundsByKey[k] = (roundsByKey[k] || 0) + 1;
+        if (!displayByKey[k]) displayByKey[k] = n;
+        totalRounds++;
+      });
+      for (var a = 0; a < names.length; a++) {
+        for (var b = a + 1; b < names.length; b++) {
+          var ka = keys[a], kb = keys[b];
+          if (!partnerCounts[ka]) partnerCounts[ka] = {};
+          if (!partnerCounts[kb]) partnerCounts[kb] = {};
+          partnerCounts[ka][kb] = (partnerCounts[ka][kb] || 0) + 1;
+          partnerCounts[kb][ka] = (partnerCounts[kb][ka] || 0) + 1;
+        }
+      }
+    }
+
+    var leaderboard = Object.keys(roundsByKey).map(function(k) {
+      return { name: displayByKey[k], rounds: roundsByKey[k] };
+    }).sort(function(x, y) { return y.rounds - x.rounds || x.name.localeCompare(y.name); });
+
+    var topPartners = Object.keys(partnerCounts).map(function(k) {
+      var partners = Object.keys(partnerCounts[k]).map(function(pk) {
+        return { name: displayByKey[pk] || pk, count: partnerCounts[k][pk] };
+      }).sort(function(x, y) { return y.count - x.count || x.name.localeCompare(y.name); }).slice(0, 5);
+      return { name: displayByKey[k], partners: partners };
+    }).sort(function(x, y) { return x.name.localeCompare(y.name); });
+
+    var courses = Object.keys(courseRounds).map(function(cc) {
+      return { course: cc, rounds: courseRounds[cc], outings: Object.keys(courseOutings[cc] || {}).length };
+    }).sort(function(x, y) { return y.rounds - x.rounds; });
+
+    // ---------- Players: active count + never played ----------
+    var playersData = playersSheet ? playersSheet.getDataRange().getValues() : [];
+    var neverPlayed = [];
+    var activeCount = 0;
+    for (var p = 1; p < playersData.length; p++) {
+      var first = (playersData[p][1] || '').toString().trim();
+      var last = (playersData[p][2] || '').toString().trim();
+      var active = (playersData[p][4] || '').toString().trim();
+      if (!first && !last) continue;
+      if (active.toLowerCase() !== 'yes') continue;
+      activeCount++;
+      var disp = (first + ' ' + last).trim();
+      if (!roundsByKey[disp.toLowerCase()]) neverPlayed.push(disp);
+    }
+    neverPlayed.sort(function(x, y) { return x.localeCompare(y); });
+
+    // ---------- Walk vs Ride from Form Responses (Yes only, last response per event) ----------
+    var formData = formSheet ? formSheet.getDataRange().getValues() : [];
+    var fStart = 0;
+    if (formData.length > 0) {
+      var fHead = formData[0].join(' ').toLowerCase();
+      if (fHead.indexOf('timestamp') !== -1 || fHead.indexOf('name') !== -1 || fHead.indexOf('walk') !== -1) fStart = 1;
+    }
+    var wrLast = {};   // (nameKey|eventId) -> walkRide value (last wins)
+    var wrName = {};   // nameKey -> display
+    for (var f = fStart; f < formData.length; f++) {
+      var frow = formData[f];
+      var rawName = (frow[1] || '').toString().trim();
+      var playing = (frow[2] || '').toString().trim();
+      var wrVal = (frow[3] || '').toString().trim();
+      var ev = (frow[6] || '').toString().trim();
+      if (rawName === '' || playing.toLowerCase() !== 'yes') continue;
+      var disp2 = rawName;
+      if (rawName.indexOf(',') !== -1) {
+        var parts2 = rawName.split(',');
+        disp2 = ((parts2[1] || '').trim() + ' ' + (parts2[0] || '').trim()).trim();
+      }
+      var nk = disp2.toLowerCase();
+      wrName[nk] = disp2;
+      wrLast[nk + '|' + ev] = wrVal.toLowerCase();
+    }
+    var wrTally = {};
+    Object.keys(wrLast).forEach(function(key) {
+      var nk = key.substring(0, key.lastIndexOf('|'));
+      if (!wrTally[nk]) wrTally[nk] = { walk: 0, ride: 0, either: 0 };
+      var v = wrLast[key];
+      if (v === 'walk') wrTally[nk].walk++;
+      else if (v === 'ride') wrTally[nk].ride++;
+      else wrTally[nk].either++;
+    });
+    var walkRide = Object.keys(wrTally).map(function(nk) {
+      var t = wrTally[nk];
+      return { name: wrName[nk], walk: t.walk, ride: t.ride, either: t.either, total: t.walk + t.ride + t.either };
+    }).sort(function(x, y) { return y.total - x.total || x.name.localeCompare(y.name); });
+
+    var result = {
+      totalOutings: Object.keys(outingDates).length,
+      totalRounds: totalRounds,
+      activePlayers: activeCount,
+      neverPlayedCount: neverPlayed.length,
+      leaderboard: leaderboard,
+      topPartners: topPartners,
+      neverPlayed: neverPlayed,
+      walkRide: walkRide,
+      courses: courses
+    };
+
+    return ContentService.createTextOutput(JSON.stringify(result))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 function getEventInfo(eventId) {
