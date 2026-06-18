@@ -444,10 +444,13 @@ function sendPairings() {
     foursomes: fsStrings
   }, function(data) {
     if (data.success) {
-      toast('Pairings saved! Check Gmail Drafts.');
+      var msg = 'Pairings sent to ' + (data.sent || 0) + ' player' + ((data.sent === 1) ? '' : 's') + '!';
+      if (data.errors && data.errors.length) msg += ' (' + data.errors.length + ' failed)';
+      if (data.unmatched && data.unmatched.length) msg += ' No email: ' + data.unmatched.join(', ');
+      toast(msg);
       setTimeout(function() {
         window.location.href = 'organizer.html';
-      }, 2000);
+      }, 3500);
     } else {
       toast('Error: ' + (data.error || 'Unknown error'));
       document.getElementById('btn-send').disabled = false;
