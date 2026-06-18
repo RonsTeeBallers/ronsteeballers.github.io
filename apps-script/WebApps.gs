@@ -180,7 +180,7 @@ function getOpenEvents() {
       for (var k = 1; k < formData.length; k++) {
         var name = formData[k][1].toString().trim();
         var response = formData[k][2].toString().trim();
-        var rawEventId = formData[k][5];
+        var rawEventId = formData[k][6];
       var rowEventId = '';
       if (rawEventId instanceof Date) {
         rowEventId = Utilities.formatDate(rawEventId, Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -299,7 +299,7 @@ function getConfirmedPlayers(eventId) {
       var name = formData[i][1].toString().trim();
       var response = formData[i][2].toString().trim();
       var walkRide = formData[i][3].toString().trim();
-      var rawEventId = formData[i][5];
+      var rawEventId = formData[i][6];
       var rowEventId = '';
       if (rawEventId instanceof Date) {
         rowEventId = Utilities.formatDate(rawEventId, Session.getScriptTimeZone(), 'yyyy-MM-dd');
@@ -311,8 +311,8 @@ function getConfirmedPlayers(eventId) {
         responseMap[name] = {
           playing: response,
           walkRide: walkRide || 'No preference',
-          comments: formData[i][4] ? formData[i][4].toString().trim() : '',
-          scoring: formData[i][6] ? formData[i][6].toString().trim() : 'No Preference'
+          comments: formData[i][5] ? formData[i][5].toString().trim() : '',
+          scoring: formData[i][4] ? formData[i][4].toString().trim() : 'No Preference'
         };
       }
     }
@@ -359,7 +359,7 @@ function debugFormResponses() {
   
   for (var i = 1; i < formData.length; i++) {
     var name = formData[i][1].toString().trim();
-    var rowEventId = formData[i][5] ? formData[i][5].toString().trim() : 'BLANK';
+    var rowEventId = formData[i][6] ? formData[i][6].toString().trim() : 'BLANK';
     Logger.log('Row ' + i + ': ' + name + ' | EventID: [' + rowEventId + '] | Length: ' + rowEventId.length);
   }
 }
@@ -869,16 +869,16 @@ function submitRSVP(params) {
       params.playerName || '',
       params.playing || '',
       params.walkRide || '',
+      params.scoring || '',
       params.comments || '',
-      params.eventId || '',
-      params.scoring || ''
+      params.eventId || ''
     ];
 
     var nextRow = formSheet.getLastRow() + 1;
     var numCols = row.length;
     formSheet.getRange(nextRow, 1, 1, numCols).setValues([row]);
-    formSheet.getRange(nextRow, 6).setNumberFormat('@STRING@');
-    formSheet.getRange(nextRow, 6).setValue(params.eventId || '');
+    formSheet.getRange(nextRow, 7).setNumberFormat('@STRING@');
+    formSheet.getRange(nextRow, 7).setValue(params.eventId || '');
 
     return ContentService.createTextOutput(JSON.stringify({success: true}))
       .setMimeType(ContentService.MimeType.JSON);

@@ -165,7 +165,7 @@ for (var i = 1; i < playersData.length; i++) {
     var name = formData[i][1];
     var response = formData[i][2];
     var walkRide = formData[i][3];
-    var comments = formData[i][4];
+    var comments = formData[i][5]; // comments moved to col F after scoring added at E
     if (name === "" || response !== "Yes") continue;
     responseMap[name] = {
       walkRide: walkRide || "",
