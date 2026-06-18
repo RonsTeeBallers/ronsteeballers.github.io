@@ -626,66 +626,115 @@ function getStats() {
     var playersSheet = ss.getSheetByName('Players');
     var formSheet = ss.getSheetByName('Form Responses');
 
-    // ---------- Pairing History: rounds, partners, courses, outings ----------
+    var coursesSheet = ss.getSheetByName('Courses');
+
+    // ---------- Canonical player names (First Last) + active flags ----------
+    var playersData = playersSheet ? playersSheet.getDataRange().getValues() : [];
+    var playerCanon = {};     // 'first last' (lower) -> display name
+    var activePlayers = [];   // display names of active players
+    for (var p = 1; p < playersData.length; p++) {
+      var first = (playersData[p][1] || '').toString().trim();
+      var last = (playersData[p][2] || '').toString().trim();
+      if (!first && !last) continue;
+      var disp = (first + ' ' + last).trim();
+      playerCanon[disp.toLowerCase()] = disp;
+      if ((playersData[p][4] || '').toString().trim().toLowerCase() === 'yes') activePlayers.push(disp);
+    }
+
+    // ---------- Course names (to classify history cells that aren't players) ----------
+    var coursesData = coursesSheet ? coursesSheet.getDataRange().getValues() : [];
+    var courseList = [];
+    for (var ci = 1; ci < coursesData.length; ci++) {
+      var cn = (coursesData[ci][0] || '').toString().trim();
+      if (cn) courseList.push(cn);
+    }
+    function canonCourse(val) {
+      var low = val.toLowerCase();
+      for (var z = 0; z < courseList.length; z++) {
+        if (low.indexOf(courseList[z].toLowerCase()) !== -1) return courseList[z];
+      }
+      return val;
+    }
+
+    // ---------- Pairing History, aggregated per OUTING (date) so re-pairings don't double count ----------
     var histData = historySheet ? historySheet.getDataRange().getValues() : [];
     var hStart = 0;
     if (histData.length > 0) {
       var hHead = histData[0].join(' ').toLowerCase();
-      if (hHead.indexOf('player') !== -1 || hHead.indexOf('date') !== -1 || hHead.indexOf('course') !== -1) {
-        hStart = 1;
-      }
+      if (hHead.indexOf('player') !== -1 || hHead.indexOf('date') !== -1 || hHead.indexOf('course') !== -1) hStart = 1;
     }
 
-    var roundsByKey = {};    // nameKey -> rounds count
-    var displayByKey = {};   // nameKey -> display name (First Last)
-    var partnerCounts = {};  // nameKey -> { partnerKey: count }
-    var outingDates = {};     // dateStr -> true
-    var courseRounds = {};    // course -> player-rounds
-    var courseOutings = {};   // course -> { dateStr: true }
-    var totalRounds = 0;
+    var datePlayers = {};  // date -> { playerKey: display }   (only recognized players)
+    var datePairs = {};    // date -> { 'ka||kb': true }
+    var dateCourse = {};   // date -> canonical course
+    var allDates = {};
 
     for (var r = hStart; r < histData.length; r++) {
       var hrow = histData[r];
-      if (!hrow || hrow.length < 2) continue;
+      if (!hrow) continue;
       var dateStr = (hrow[0] || '').toString().trim();
-      var course = (hrow[hrow.length - 1] || '').toString().trim();
+      if (!dateStr) continue;
 
       var names = [];
-      for (var c = 1; c <= hrow.length - 2; c++) {
-        var nm = (hrow[c] || '').toString().trim();
-        if (nm !== '') names.push(nm);
-      }
-      if (names.length === 0) continue;
-
-      if (dateStr) outingDates[dateStr] = true;
-      if (course) {
-        courseRounds[course] = (courseRounds[course] || 0) + names.length;
-        if (!courseOutings[course]) courseOutings[course] = {};
-        if (dateStr) courseOutings[course][dateStr] = true;
-      }
-
-      var keys = names.map(function(n) { return n.toLowerCase(); });
-      names.forEach(function(n, idx) {
-        var k = keys[idx];
-        roundsByKey[k] = (roundsByKey[k] || 0) + 1;
-        if (!displayByKey[k]) displayByKey[k] = n;
-        totalRounds++;
-      });
-      for (var a = 0; a < names.length; a++) {
-        for (var b = a + 1; b < names.length; b++) {
-          var ka = keys[a], kb = keys[b];
-          if (!partnerCounts[ka]) partnerCounts[ka] = {};
-          if (!partnerCounts[kb]) partnerCounts[kb] = {};
-          partnerCounts[ka][kb] = (partnerCounts[ka][kb] || 0) + 1;
-          partnerCounts[kb][ka] = (partnerCounts[kb][ka] || 0) + 1;
+      var courseMatch = '';
+      var lastUnknown = '';
+      for (var c = 1; c < hrow.length; c++) {
+        var val = (hrow[c] || '').toString().trim();
+        if (!val) continue;
+        var canonName = playerCanon[val.toLowerCase()];
+        if (canonName) {
+          names.push(canonName);
+        } else {
+          var cc = canonCourse(val);
+          if (cc !== val || courseList.indexOf(val) !== -1) courseMatch = cc;
+          else lastUnknown = val;
         }
       }
+
+      if (names.length > 0) {
+        if (!datePlayers[dateStr]) datePlayers[dateStr] = {};
+        if (!datePairs[dateStr]) datePairs[dateStr] = {};
+        names.forEach(function(n) { datePlayers[dateStr][n.toLowerCase()] = n; });
+        for (var a = 0; a < names.length; a++) {
+          for (var b = a + 1; b < names.length; b++) {
+            var ka = names[a].toLowerCase(), kb = names[b].toLowerCase();
+            datePairs[dateStr][(ka < kb ? ka + '||' + kb : kb + '||' + ka)] = true;
+          }
+        }
+        allDates[dateStr] = true;
+      }
+      var courseForRow = courseMatch || lastUnknown;
+      if (courseForRow) { dateCourse[dateStr] = courseForRow; allDates[dateStr] = true; }
     }
+
+    // Rounds played = number of distinct outings a player appears in
+    var roundsByKey = {};
+    var displayByKey = {};
+    var totalRounds = 0;
+    Object.keys(datePlayers).forEach(function(d) {
+      Object.keys(datePlayers[d]).forEach(function(k) {
+        roundsByKey[k] = (roundsByKey[k] || 0) + 1;
+        displayByKey[k] = datePlayers[d][k];
+        totalRounds++;
+      });
+    });
 
     var leaderboard = Object.keys(roundsByKey).map(function(k) {
       return { name: displayByKey[k], rounds: roundsByKey[k] };
     }).sort(function(x, y) { return y.rounds - x.rounds || x.name.localeCompare(y.name); });
 
+    // Partners = distinct outings two players shared a foursome
+    var partnerCounts = {};
+    Object.keys(datePairs).forEach(function(d) {
+      Object.keys(datePairs[d]).forEach(function(pairKey) {
+        var parts = pairKey.split('||');
+        var ka = parts[0], kb = parts[1];
+        if (!partnerCounts[ka]) partnerCounts[ka] = {};
+        if (!partnerCounts[kb]) partnerCounts[kb] = {};
+        partnerCounts[ka][kb] = (partnerCounts[ka][kb] || 0) + 1;
+        partnerCounts[kb][ka] = (partnerCounts[kb][ka] || 0) + 1;
+      });
+    });
     var topPartners = Object.keys(partnerCounts).map(function(k) {
       var partners = Object.keys(partnerCounts[k]).map(function(pk) {
         return { name: displayByKey[pk] || pk, count: partnerCounts[k][pk] };
@@ -693,25 +742,23 @@ function getStats() {
       return { name: displayByKey[k], partners: partners };
     }).sort(function(x, y) { return x.name.localeCompare(y.name); });
 
-    var courses = Object.keys(courseRounds).map(function(cc) {
-      return { course: cc, rounds: courseRounds[cc], outings: Object.keys(courseOutings[cc] || {}).length };
-    }).sort(function(x, y) { return y.rounds - x.rounds; });
+    // Courses = number of distinct outings planned at each course (players not counted)
+    var courseOutingCount = {};
+    Object.keys(dateCourse).forEach(function(d) {
+      var nm = dateCourse[d];
+      courseOutingCount[nm] = (courseOutingCount[nm] || 0) + 1;
+    });
+    var courses = Object.keys(courseOutingCount).map(function(nm) {
+      return { course: nm, outings: courseOutingCount[nm] };
+    }).sort(function(x, y) { return y.outings - x.outings || x.course.localeCompare(y.course); });
 
-    // ---------- Players: active count + never played ----------
-    var playersData = playersSheet ? playersSheet.getDataRange().getValues() : [];
-    var neverPlayed = [];
-    var activeCount = 0;
-    for (var p = 1; p < playersData.length; p++) {
-      var first = (playersData[p][1] || '').toString().trim();
-      var last = (playersData[p][2] || '').toString().trim();
-      var active = (playersData[p][4] || '').toString().trim();
-      if (!first && !last) continue;
-      if (active.toLowerCase() !== 'yes') continue;
-      activeCount++;
-      var disp = (first + ' ' + last).trim();
-      if (!roundsByKey[disp.toLowerCase()]) neverPlayed.push(disp);
-    }
-    neverPlayed.sort(function(x, y) { return x.localeCompare(y); });
+    var outingDates = allDates;
+    var activeCount = activePlayers.length;
+
+    // Active players who have never played
+    var neverPlayed = activePlayers.filter(function(disp) {
+      return !roundsByKey[disp.toLowerCase()];
+    }).sort(function(x, y) { return x.localeCompare(y); });
 
     // ---------- Walk vs Ride from Form Responses (Yes only, last response per event) ----------
     var formData = formSheet ? formSheet.getDataRange().getValues() : [];

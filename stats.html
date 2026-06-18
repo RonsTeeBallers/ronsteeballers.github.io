@@ -232,8 +232,7 @@
     if (!STATS.courses || !STATS.courses.length) { el.innerHTML = '<div class="empty">No course data yet.</div>'; return; }
     el.innerHTML = STATS.courses.map(function(c) {
       return '<div class="row"><span class="row-name">' + esc(c.course) + '</span>'
-        + '<span class="wr-bits"><span class="wr-either">' + c.outings + ' outings</span>'
-        + '<span class="row-val">' + c.rounds + ' rounds</span></span></div>';
+        + '<span class="row-val">' + c.outings + ' outing' + (c.outings === 1 ? '' : 's') + '</span></div>';
     }).join('');
   }
 
