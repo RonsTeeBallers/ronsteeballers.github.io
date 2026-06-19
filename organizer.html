@@ -258,21 +258,6 @@
 
   <div class="section-label">Tools</div>
   <div class="tools-card">
-    <button class="tool-btn" onclick="runTool('syncForms')">
-      <span class="icon">🔄</span>
-      <span>Sync Player Names to Forms</span>
-      <span class="arrow">›</span>
-    </button>
-    <button class="tool-btn" onclick="runTool('syncContacts')">
-      <span class="icon">📋</span>
-      <span>Sync Contact Groups</span>
-      <span class="arrow">›</span>
-    </button>
-    <button class="tool-btn" onclick="window.location.href='signup.html?event=' + currentEventId">
-      <span class="icon">👥</span>
-      <span>View Current Signup List</span>
-      <span class="arrow">›</span>
-    </button>
     <button class="tool-btn" onclick="window.location.href='stats.html'">
       <span class="icon">📊</span>
       <span>View Statistics</span>
@@ -654,16 +639,6 @@ function viewPlayers(eventId) {
     }
   }
 
-  function runTool(tool) {
-    showToast('Running ' + tool + '...');
-    jsonpCall(tool, {}, function(data) {
-      if (data.success) {
-        showToast(data.message || 'Done!');
-      } else {
-        showToast('Error: ' + (data.error || 'Unknown error'));
-      }
-    });
-  }
 
   ensureOrganizerAccess(loadEvents);
 </script>
