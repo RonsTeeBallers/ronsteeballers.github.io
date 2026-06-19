@@ -345,9 +345,11 @@
         placeholder="Any special notes for this event...">
     </div>
 
+    <div id="create-error" style="display:none;background:#fdf2f2;border:1px solid #e74c3c;color:#922b21;padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;"></div>
+
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideCreateEvent()">Cancel</button>
-      <button class="btn btn-primary" onclick="createEvent()">Create Event</button>
+      <button class="btn btn-primary" id="btn-create-event" onclick="createEvent()">Create Event</button>
     </div>
   </div>
 </div>
@@ -493,6 +495,10 @@ function viewPlayers(eventId) {
   
   function showCreateEvent() {
     loadVenues();
+    document.getElementById('create-error').style.display = 'none';
+    var btn = document.getElementById('btn-create-event');
+    btn.disabled = false;
+    btn.textContent = 'Create Event';
     document.getElementById('create-modal').classList.add('show');
   }
 
@@ -515,6 +521,12 @@ function viewPlayers(eventId) {
     });
   }
 
+  function showCreateError(msg) {
+    var el = document.getElementById('create-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
   function createEvent() {
     var date = document.getElementById('new-date').value;
     var venue = document.getElementById('new-venue').value;
@@ -523,10 +535,29 @@ function viewPlayers(eventId) {
     var mailingList = document.getElementById('new-mailing-list').value;
     var notes = document.getElementById('new-notes').value;
 
-    if (!date || !venue || !time || !slots) {
-      showToast('Please fill in all required fields');
+    var missing = [];
+    if (!date) missing.push('Date');
+    if (!venue) missing.push('Venue');
+    if (!time) missing.push('Starting Time');
+    if (!slots) missing.push('Tee Times Reserved');
+    if (missing.length) {
+      showCreateError('Please fill in: ' + missing.join(', '));
       return;
     }
+
+    document.getElementById('create-error').style.display = 'none';
+    var btn = document.getElementById('btn-create-event');
+    btn.disabled = true;
+    btn.textContent = 'Creating...';
+
+    var done = false;
+    var timeout = setTimeout(function() {
+      if (done) return;
+      done = true;
+      btn.disabled = false;
+      btn.textContent = 'Create Event';
+      showCreateError('No response — check your connection and try again.');
+    }, 12000);
 
     jsonpCall('createEvent', {
       date: date,
@@ -536,12 +567,17 @@ function viewPlayers(eventId) {
       mailingList: mailingList,
       notes: notes
     }, function(data) {
-      if (data.success) {
+      if (done) return;
+      done = true;
+      clearTimeout(timeout);
+      btn.disabled = false;
+      btn.textContent = 'Create Event';
+      if (data && data.success) {
         hideCreateEvent();
         showToast('Event created!');
         loadEvents();
       } else {
-        showToast('Error: ' + (data.error || 'Unknown error'));
+        showCreateError('Error: ' + ((data && data.error) || 'Unknown error'));
       }
     });
   }
