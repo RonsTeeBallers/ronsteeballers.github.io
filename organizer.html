@@ -286,14 +286,17 @@
   <!-- Invite Preview Modal -->
 <div class="modal-overlay" id="invite-modal">
   <div class="modal">
-    <h2>Send Invite</h2>
+    <h2>Preview &amp; Send Invite</h2>
     <div id="invite-details" style="background:#eaf2ff;padding:12px;border-radius:8px;margin-bottom:16px;font-size:14px;color:#1a2332;"></div>
     <div class="form-group">
       <label class="form-label">Optional Weekly Comment</label>
-      <input type="text" class="form-input" id="invite-comment" placeholder="e.g. Cart path only this week due to rain...">
+      <input type="text" class="form-input" id="invite-comment" placeholder="e.g. Cart path only this week due to rain..." oninput="markPreviewStale()">
     </div>
     <div class="form-group">
-      <label class="form-label" style="color:#5d6d7e;font-size:11px;">Sending to: <span id="invite-mailing-list"></span></label>
+      <label class="form-label">Preview — exactly what players receive</label>
+      <div id="invite-preview-status" style="font-size:13px;color:#5d6d7e;margin-bottom:8px;">Loading preview…</div>
+      <iframe id="invite-frame" title="Invite preview" style="width:100%;height:360px;border:1px solid #d0d8e4;border-radius:8px;background:white;"></iframe>
+      <button class="btn btn-secondary" style="width:100%;margin-top:8px;" onclick="loadInvitePreview()">&#8635; Update preview with my comment</button>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideInvitePreview()">Cancel</button>
@@ -463,10 +466,39 @@ function viewPlayers(eventId) {
     document.getElementById('invite-comment').value = '';
     document.getElementById('invite-details').textContent =
       venue + ' — ' + formatDate(eventId);
-    document.getElementById('invite-mailing-list').textContent = mailingList;
     document.getElementById('btn-send-invite').disabled = false;
     document.getElementById('btn-send-invite').textContent = 'Send Invites';
+    document.getElementById('invite-frame').srcdoc = '';
     document.getElementById('invite-modal').classList.add('show');
+    loadInvitePreview();
+  }
+
+  function markPreviewStale() {
+    document.getElementById('invite-preview-status').textContent =
+      'Comment changed — tap "Update preview" to see it in the email.';
+  }
+
+  function loadInvitePreview() {
+    var status = document.getElementById('invite-preview-status');
+    status.textContent = 'Loading preview…';
+    var comment = document.getElementById('invite-comment').value || '';
+    jsonpCall('previewInvite', {
+      eventId: currentInviteEventId,
+      mailingList: currentMailingList,
+      comment: comment
+    }, function(data) {
+      if (data && data.success) {
+        document.getElementById('invite-frame').srcdoc = data.html;
+        status.textContent = 'Will send to ' + data.count + ' player' +
+          (data.count === 1 ? '' : 's') + ' in ' + data.mailingList +
+          (data.sampleName ? ' (preview addressed to ' + data.sampleName + ')' : '');
+        var sb = document.getElementById('btn-send-invite');
+        sb.textContent = data.count > 0 ? 'Send to ' + data.count : 'Send Invites';
+        sb.disabled = data.count === 0;
+      } else {
+        status.textContent = 'Preview error: ' + ((data && data.error) || 'unknown');
+      }
+    });
   }
 
   function hideInvitePreview() {
@@ -484,11 +516,14 @@ function viewPlayers(eventId) {
       mailingList: currentMailingList,
       comment: comment
     }, function(data) {
-      hideInvitePreview();
-      if (data.success) {
+      btn.disabled = false;
+      btn.textContent = 'Send Invites';
+      if (data && data.success) {
+        hideInvitePreview();
         showToast('Sent ' + data.sent + ' invites successfully!');
       } else {
-        showToast('Error: ' + (data.error || 'Unknown error'));
+        document.getElementById('invite-preview-status').textContent =
+          'Send error: ' + ((data && data.error) || 'Unknown error');
       }
     });
   }
