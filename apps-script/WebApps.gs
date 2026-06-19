@@ -900,8 +900,8 @@ function buildInviteEmailHtml_(o) {
     '<div style="background:#f0f4f8;padding:16px;border-radius:8px;margin:16px 0;">' +
     '<p style="margin:4px 0;font-size:16px;font-weight:700;color:#1a2332;">&#128197; ' + o.formattedDate + '</p>' +
     '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#128205; ' + venueLink + '</p>' +
-    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#9200; ' + o.timeStr + '</p>' +
-    '<p style="margin:4px 0;font-size:14px;color:#5d6d7e;">' + o.slotsReserved + ' tee times reserved</p>' +
+    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#9200; ' + o.timeStr + ' (first tee time)</p>' +
+    '<p style="margin:4px 0;font-size:14px;color:#5d6d7e;">' + o.slotsReserved + ' tee times reserved under the name Ron Blanton</p>' +
     '</div>' +
     notesSection +
     feeSection +
