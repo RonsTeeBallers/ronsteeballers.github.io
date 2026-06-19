@@ -346,11 +346,11 @@
     </div>
 
     <div id="create-error" style="display:none;background:#fdf2f2;border:1px solid #e74c3c;color:#922b21;padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;"></div>
-    <div style="text-align:center;font-size:11px;color:#aab7c4;margin-top:10px;">build 5</div>
+    <div style="text-align:center;font-size:11px;color:#aab7c4;margin-top:10px;">build 6</div>
 
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideCreateEvent()">Cancel</button>
-      <button class="btn btn-primary" id="btn-create-event" onclick="createEvent()">Create Event</button>
+      <button class="btn btn-primary" id="btn-create-event" onclick="submitNewEvent()">Create Event</button>
     </div>
   </div>
 </div>
@@ -534,7 +534,7 @@ function viewPlayers(eventId) {
     el.style.display = 'block';
   }
 
-  function createEvent() {
+  function submitNewEvent() {
     var btn = document.getElementById('btn-create-event');
     if (btn) btn.textContent = 'Working…';
     try {
