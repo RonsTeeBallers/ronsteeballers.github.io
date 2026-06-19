@@ -885,7 +885,11 @@ function buildInviteEmailHtml_(o) {
   var commentSection = o.comment
     ? '<p style="background:#eaf2ff;padding:12px;border-radius:8px;border-left:3px solid #1a5276;">' + o.comment + '</p>'
     : '';
-  return '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
+  var notesSection = o.notes
+    ? '<p style="color:#5d6d7e;font-size:15px;line-height:1.5;margin:0 0 12px;">' + o.notes + '</p>'
+    : '';
+  return '<meta charset="utf-8">' +
+    '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
     '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
     '<div style="font-size:32px;">⛳</div>' +
     '<h1 style="margin:8px 0;font-size:22px;">Golf Outing Invitation</h1>' +
@@ -899,6 +903,7 @@ function buildInviteEmailHtml_(o) {
     '<p style="margin:4px 0;font-size:16px;color:#1a2332;">⏰ ' + o.timeStr + '</p>' +
     '<p style="margin:4px 0;font-size:14px;color:#5d6d7e;">' + o.slotsReserved + ' tee times reserved</p>' +
     '</div>' +
+    notesSection +
     feeSection +
     commentSection +
     '<div style="text-align:center;margin:24px 0;">' +
@@ -994,6 +999,7 @@ function previewInvite(params) {
       timeStr: timeStr, slotsReserved: slotsReserved,
       greenFee: greenFee, cartFee: cartFee, total: total,
       comment: comment,
+      notes: eventRow[6] ? eventRow[6].toString() : '',
       rsvpUrl: baseUrl + '/rsvp.html?event=' + eventId + '&player=' + sampleSlug,
       signupUrl: baseUrl + '/signup.html?event=' + eventId
     });
@@ -1130,7 +1136,8 @@ function sendInviteEmails(params) {
         formattedDate: formattedDate, venueName: venueName, venueUrl: venueUrl,
         timeStr: timeStr, slotsReserved: slotsReserved,
         greenFee: greenFee, cartFee: cartFee, total: total,
-        comment: comment, rsvpUrl: rsvpUrl, signupUrl: signupUrl
+        comment: comment, notes: eventRow[6] ? eventRow[6].toString() : '',
+        rsvpUrl: rsvpUrl, signupUrl: signupUrl
       });
 
       try {
