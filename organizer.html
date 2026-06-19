@@ -528,58 +528,67 @@ function viewPlayers(eventId) {
   }
 
   function createEvent() {
-    var date = document.getElementById('new-date').value;
-    var venue = document.getElementById('new-venue').value;
-    var time = document.getElementById('new-time').value;
-    var slots = document.getElementById('new-slots').value;
-    var mailingList = document.getElementById('new-mailing-list').value;
-    var notes = document.getElementById('new-notes').value;
-
-    var missing = [];
-    if (!date) missing.push('Date');
-    if (!venue) missing.push('Venue');
-    if (!time) missing.push('Starting Time');
-    if (!slots) missing.push('Tee Times Reserved');
-    if (missing.length) {
-      showCreateError('Please fill in: ' + missing.join(', '));
-      return;
-    }
-
-    document.getElementById('create-error').style.display = 'none';
     var btn = document.getElementById('btn-create-event');
-    btn.disabled = true;
-    btn.textContent = 'Creating...';
+    try {
+      var date = document.getElementById('new-date').value;
+      var venue = document.getElementById('new-venue').value;
+      var time = document.getElementById('new-time').value;
+      var slots = document.getElementById('new-slots').value;
+      var mailingList = document.getElementById('new-mailing-list').value;
+      var notes = document.getElementById('new-notes').value;
 
-    var done = false;
-    var timeout = setTimeout(function() {
-      if (done) return;
-      done = true;
-      btn.disabled = false;
-      btn.textContent = 'Create Event';
-      showCreateError('No response — check your connection and try again.');
-    }, 12000);
-
-    jsonpCall('createEvent', {
-      date: date,
-      venue: venue,
-      time: time,
-      slots: slots,
-      mailingList: mailingList,
-      notes: notes
-    }, function(data) {
-      if (done) return;
-      done = true;
-      clearTimeout(timeout);
-      btn.disabled = false;
-      btn.textContent = 'Create Event';
-      if (data && data.success) {
-        hideCreateEvent();
-        showToast('Event created!');
-        loadEvents();
-      } else {
-        showCreateError('Error: ' + ((data && data.error) || 'Unknown error'));
+      var missing = [];
+      if (!date) missing.push('Date');
+      if (!venue) missing.push('Venue');
+      if (!time) missing.push('Starting Time');
+      if (!slots) missing.push('Tee Times Reserved');
+      if (missing.length) {
+        showCreateError('Please fill in: ' + missing.join(', '));
+        return;
       }
-    });
+
+      document.getElementById('create-error').style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Creating...';
+
+      var done = false;
+      var script;
+      function finish(ok, msg) {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        try { if (script && script.parentNode) script.parentNode.removeChild(script); } catch (_) {}
+        btn.disabled = false;
+        btn.textContent = 'Create Event';
+        if (ok) { hideCreateEvent(); showToast('Event created!'); loadEvents(); }
+        else { showCreateError(msg); }
+      }
+
+      var fn = 'handle_create_' + Date.now();
+      window[fn] = function(data) {
+        if (data && data.success) finish(true);
+        else finish(false, 'Server replied with an error: ' + ((data && data.error) || 'unknown'));
+      };
+      var timer = setTimeout(function() {
+        finish(false, 'No response after 12s. The request may be blocked by Safari "Prevent Cross-Site Tracking" or a content blocker. Try toggling that off, or use the Mac.');
+      }, 12000);
+
+      var url = BACKEND_URL + '?action=createEvent&callback=' + fn
+        + '&date=' + encodeURIComponent(date)
+        + '&venue=' + encodeURIComponent(venue)
+        + '&time=' + encodeURIComponent(time)
+        + '&slots=' + encodeURIComponent(slots)
+        + '&mailingList=' + encodeURIComponent(mailingList)
+        + '&notes=' + encodeURIComponent(notes);
+
+      script = document.createElement('script');
+      script.src = url;
+      script.onerror = function() { finish(false, 'Could not load from the server (script blocked or network error).'); };
+      document.body.appendChild(script);
+    } catch (e) {
+      if (btn) { btn.disabled = false; btn.textContent = 'Create Event'; }
+      showCreateError('Script error: ' + e.message);
+    }
   }
 
   function runTool(tool) {
