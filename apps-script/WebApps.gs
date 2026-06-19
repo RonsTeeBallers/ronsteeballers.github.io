@@ -4,7 +4,11 @@ function doGet(e) {
   var callback = params.callback || '';
   var result;
 
-  if (action === 'getEvent') {
+  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true };
+  if (GUARDED[action] && !passcodeOk_(params)) {
+    result = ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized: invalid organizer passcode'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } else if (action === 'getEvent') {
     result = getEventData(params.eventId, params.player);
   } else if (action === 'getConfirmed') {
     result = getConfirmedPlayers(params.eventId);
@@ -24,6 +28,8 @@ function doGet(e) {
     result = sendInviteEmails(params);
   } else if (action === 'previewInvite') {
     result = previewInvite(params);
+  } else if (action === 'checkPasscode') {
+    result = checkPasscode(params);
   } else if (action === 'submitRSVP') {
     result = submitRSVP(params);
   } else {
@@ -49,6 +55,22 @@ function doPost(e) {
   }
 
   return ContentService.createTextOutput(JSON.stringify({error: 'Unknown action'}))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+// Organizer passcode gate. Set Script Property ORGANIZER_PASSCODE to enable it.
+// If the property is not set, the app stays open (no lockout).
+function passcodeOk_(params) {
+  var pc = PropertiesService.getScriptProperties().getProperty('ORGANIZER_PASSCODE');
+  if (!pc) return true;
+  return (params.passcode || '') === pc;
+}
+
+function checkPasscode(params) {
+  var pc = PropertiesService.getScriptProperties().getProperty('ORGANIZER_PASSCODE');
+  var required = !!pc;
+  var valid = !required || ((params.passcode || '') === pc);
+  return ContentService.createTextOutput(JSON.stringify({ required: required, valid: valid }))
     .setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -192,7 +214,7 @@ function getOpenEvents() {
         rowEventId = rawEventId.toString().trim();
       }
         if (name === '') continue;
-        if (rowEventId === '' || rowEventId === dateStr) {
+        if (rowEventId === dateStr) {
           responseMap[name] = response;
         }
       }

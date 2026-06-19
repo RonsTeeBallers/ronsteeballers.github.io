@@ -224,6 +224,52 @@ var groups = [];
 var startMin = 660;
 var interval = 9;
 var dragging = null;
+var PASSCODE = localStorage.getItem('rtb_passcode') || '';
+
+function ensureOrganizerAccess(onOk) {
+  jsonp('checkPasscode', { passcode: PASSCODE }, function(data) {
+    if (!data || data.error || data.valid || data.required === false) { onOk(); return; }
+    showPasscodeGate(onOk);
+  });
+}
+
+function showPasscodeGate(onOk) {
+  var ov = document.createElement('div');
+  ov.style.cssText = 'position:fixed;inset:0;background:#1a5276;display:flex;align-items:center;justify-content:center;z-index:9999;padding:24px;';
+  ov.innerHTML =
+    '<div style="background:white;border-radius:16px;padding:28px 22px;max-width:340px;width:100%;text-align:center;font-family:-apple-system,BlinkMacSystemFont,sans-serif;">' +
+    '<div style="font-size:40px;">&#9971;</div>' +
+    '<h2 style="font-size:20px;color:#1a5276;margin:8px 0 4px;">Organizer Access</h2>' +
+    '<p style="font-size:14px;color:#5d6d7e;margin-bottom:16px;">Enter the organizer passcode to continue.</p>' +
+    '<input id="pc-input" type="password" placeholder="Passcode" style="width:100%;padding:14px;border:2px solid #d0d8e4;border-radius:10px;font-size:16px;margin-bottom:10px;">' +
+    '<div id="pc-err" style="display:none;color:#922b21;font-size:13px;margin-bottom:10px;"></div>' +
+    '<button id="pc-go" style="width:100%;padding:14px;background:#1a5276;color:white;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;">Enter</button>' +
+    '</div>';
+  document.body.appendChild(ov);
+  var input = ov.querySelector('#pc-input');
+  var err = ov.querySelector('#pc-err');
+  var go = ov.querySelector('#pc-go');
+  input.focus();
+  function submit() {
+    var val = input.value.trim();
+    if (!val) return;
+    go.disabled = true; go.textContent = 'Checking…';
+    jsonp('checkPasscode', { passcode: val }, function(data) {
+      go.disabled = false; go.textContent = 'Enter';
+      if (data && data.valid) {
+        PASSCODE = val;
+        localStorage.setItem('rtb_passcode', val);
+        document.body.removeChild(ov);
+        onOk();
+      } else {
+        err.style.display = 'block';
+        err.textContent = 'Incorrect passcode. Try again.';
+      }
+    });
+  }
+  go.onclick = submit;
+  input.onkeydown = function(e) { if (e.key === 'Enter') submit(); };
+}
 
 function toast(msg) {
   var el = document.getElementById('toast');
@@ -237,6 +283,7 @@ function jsonp(action, params, cb) {
   window[fn] = cb;
   var url = BACKEND + '?action=' + action + '&callback=' + fn;
   for (var k in params) url += '&' + k + '=' + encodeURIComponent(params[k]);
+  if (action !== 'checkPasscode') url += '&passcode=' + encodeURIComponent(PASSCODE);
   var s = document.createElement('script');
   s.src = url;
   document.head.appendChild(s);
@@ -498,7 +545,7 @@ function init() {
   });
 }
 
-init();
+ensureOrganizerAccess(init);
 </script>
 </body>
 </html>
