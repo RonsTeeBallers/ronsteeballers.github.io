@@ -479,7 +479,6 @@
         html += '<button class="btn btn-secondary" onclick="viewPlayers(\'' + event.id + '\')">Players</button>';
         html += '<button class="btn btn-primary" onclick="showInvitePreview(\'' + event.id + '\',\'' + event.venue + '\',\'' + event.mailingList + '\')">Invite</button>';
         html += '<button class="btn btn-primary" onclick="goToPairing(\'' + event.id + '\')">Pair</button>';
-        html += '<button class="btn btn-success" onclick="sendPairings(\'' + event.id + '\')">Email</button>';
         html += '</div>';
         html += '</div>';
       });
@@ -495,10 +494,6 @@ function viewPlayers(eventId) {
     window.location.href = 'pairing.html?event=' + eventId;
   }
 
-  function sendPairings(eventId) {
-    showToast('Pairings email coming soon...');
-  }
-  
   var currentInviteEventId = '';
   var currentMailingList = '';
 
