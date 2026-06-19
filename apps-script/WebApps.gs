@@ -135,7 +135,7 @@ function getEventData(eventId, playerSlug) {
     var result = {
       player: playerData,
       event: {
-        title: 'Golf Outing — ' + event.venueName,
+        title: 'Golf Outing - ' + event.venueName,
         date: event.date,
         venue: venue.name,
         venueUrl: venue.url,
@@ -454,7 +454,7 @@ function savePairings(params) {
       var teeTimeStr = fh + ':' + (fm < 10 ? '0' + fm : fm) + ' ' + fap;
 
       var headerCell = draftSheet.getRange(row, 1);
-      headerCell.setValue('Foursome ' + (idx + 1) + ' — ' + teeTimeStr);
+      headerCell.setValue('Foursome ' + (idx + 1) + ' - ' + teeTimeStr);
       headerCell.setFontWeight('bold');
       row++;
 
@@ -478,7 +478,7 @@ function savePairings(params) {
       var fap = fh >= 12 ? 'PM' : 'AM';
       fh = fh % 12 || 12;
       var teeTimeStr = fh + ':' + (fm < 10 ? '0' + fm : fm) + ' ' + fap;
-      emailLines.push('<p><strong>Foursome ' + (idx + 1) + ' — ' + teeTimeStr + '</strong></p>');
+      emailLines.push('<p><strong>Foursome ' + (idx + 1) + ' - ' + teeTimeStr + '</strong></p>');
       foursome.forEach(function(player) {
         emailLines.push('<p style="margin:0;padding-left:20px;">' + player.name + ' (' + player.walkRide + ')</p>');
       });
@@ -492,7 +492,7 @@ function savePairings(params) {
       '<p>Tee times reserved under Ron Blanton.</p>' +
       '<p>See you on the course!</p>';
 
-    var subject = 'Golf Pairings — ' + formattedDate + ' at ' + venueName;
+    var subject = 'Golf Pairings - ' + formattedDate + ' at ' + venueName;
 
     // Build a map of "First Last" (lowercased) -> email from the Players tab
     var playersSheet = ss.getSheetByName('Players');
@@ -612,9 +612,9 @@ function testBrevoSend() {
   var result = sendBrevoEmail_(
     'ronsteeballers@gmail.com',
     'Ron',
-    'TEST — Golf Pairings email',
+    'TEST - Golf Pairings email',
     '<p>This is a test of the direct pairings send via Brevo.</p>' +
-    '<p><strong>Foursome 1 — 11:00 AM</strong></p>' +
+    '<p><strong>Foursome 1 - 11:00 AM</strong></p>' +
     '<p style="margin:0;padding-left:20px;">Test Player (Walk)</p>'
   );
   Logger.log(JSON.stringify(result));
@@ -891,24 +891,24 @@ function buildInviteEmailHtml_(o) {
   return '<meta charset="utf-8">' +
     '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
     '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
-    '<div style="font-size:32px;">⛳</div>' +
+    '<div style="font-size:32px;">&#9971;</div>' +
     '<h1 style="margin:8px 0;font-size:22px;">Golf Outing Invitation</h1>' +
     '</div>' +
     '<div style="background:white;padding:24px;border:1px solid #e0e8f0;border-top:none;">' +
     '<p style="font-size:18px;font-weight:700;color:#1a2332;">Hi ' + o.firstName + '!</p>' +
     '<p style="color:#5d6d7e;">You\'re invited to join us for golf:</p>' +
     '<div style="background:#f0f4f8;padding:16px;border-radius:8px;margin:16px 0;">' +
-    '<p style="margin:4px 0;font-size:16px;font-weight:700;color:#1a2332;">📅 ' + o.formattedDate + '</p>' +
-    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">📍 ' + venueLink + '</p>' +
-    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">⏰ ' + o.timeStr + '</p>' +
+    '<p style="margin:4px 0;font-size:16px;font-weight:700;color:#1a2332;">&#128197; ' + o.formattedDate + '</p>' +
+    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#128205; ' + venueLink + '</p>' +
+    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#9200; ' + o.timeStr + '</p>' +
     '<p style="margin:4px 0;font-size:14px;color:#5d6d7e;">' + o.slotsReserved + ' tee times reserved</p>' +
     '</div>' +
     notesSection +
     feeSection +
     commentSection +
     '<div style="text-align:center;margin:24px 0;">' +
-    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#1a5276;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">✅ I\'M IN</a>' +
-    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#922b21;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">❌ I\'M OUT</a>' +
+    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#1a5276;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#9989; I\'M IN</a>' +
+    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#922b21;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#10060; I\'M OUT</a>' +
     '</div>' +
     '<p style="text-align:center;color:#5d6d7e;font-size:14px;">See who else is playing: <a href="' + o.signupUrl + '" style="color:#1a5276;">View Signup List</a></p>' +
     '</div>' +
@@ -1007,7 +1007,7 @@ function previewInvite(params) {
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
       html: html,
-      subject: 'Golf Outing — ' + formattedDate + ' at ' + venueName,
+      subject: 'Golf Outing - ' + formattedDate + ' at ' + venueName,
       count: count,
       mailingList: mailingList,
       sampleName: sampleName
@@ -1150,7 +1150,7 @@ function sendInviteEmails(params) {
           payload: JSON.stringify({
             sender: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
             to: [{ email: recipient.email, name: recipient.firstName }],
-            subject: 'Golf Outing — ' + formattedDate + ' at ' + venueName,
+            subject: 'Golf Outing - ' + formattedDate + ' at ' + venueName,
             htmlContent: htmlBody
           }),
           muteHttpExceptions: true
