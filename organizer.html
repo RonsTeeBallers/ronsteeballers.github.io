@@ -346,7 +346,6 @@
     </div>
 
     <div id="create-error" style="display:none;background:#fdf2f2;border:1px solid #e74c3c;color:#922b21;padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;"></div>
-    <div style="text-align:center;font-size:11px;color:#aab7c4;margin-top:10px;">build 6</div>
 
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideCreateEvent()">Cancel</button>
@@ -359,12 +358,6 @@
 <script>
   var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxTDDH0nhMzS4YycZImyXV6w_cZr9j1jrF4A9VwljttPzNVH1oE5Xgx3c_8QXveneWA/exec';
   var currentEventId = '';
-
-  window.onerror = function(msg, src, line) {
-    var el = document.getElementById('create-error');
-    if (el) { el.textContent = 'JS error: ' + msg + ' (line ' + line + ')'; el.style.display = 'block'; }
-    return false;
-  };
 
   function formatDate(dateStr) {
     if (!dateStr) return '';
@@ -536,7 +529,6 @@ function viewPlayers(eventId) {
 
   function submitNewEvent() {
     var btn = document.getElementById('btn-create-event');
-    if (btn) btn.textContent = 'Working…';
     try {
       var date = document.getElementById('new-date').value;
       var venue = document.getElementById('new-venue').value;
