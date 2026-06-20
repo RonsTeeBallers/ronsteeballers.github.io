@@ -215,12 +215,15 @@ function getOpenEvents() {
       }
         if (name === '') continue;
         if (rowEventId === dateStr) {
-          responseMap[name] = response;
+          responseMap[name] = { response: response, guest: formData[k][7] ? formData[k][7].toString().trim() : '' };
         }
       }
       var confirmed = 0;
       for (var name in responseMap) {
-        if (responseMap[name] === 'Yes') confirmed++;
+        if (responseMap[name].response === 'Yes') {
+          confirmed++;
+          if (responseMap[name].guest) confirmed++;
+        }
       }
 
       events.push({
@@ -338,7 +341,8 @@ function getConfirmedPlayers(eventId) {
           playing: response,
           walkRide: walkRide || 'No preference',
           comments: formData[i][5] ? formData[i][5].toString().trim() : '',
-          scoring: formData[i][4] ? formData[i][4].toString().trim() : 'No Preference'
+          scoring: formData[i][4] ? formData[i][4].toString().trim() : 'No Preference',
+          guest: formData[i][7] ? formData[i][7].toString().trim() : ''
         };
       }
     }
@@ -366,6 +370,21 @@ function getConfirmedPlayers(eventId) {
         : p.name;
       return { name: display, walkRide: p.walkRide, scoring: p.scoring };
     });
+
+    // Append each guest as a confirmed entry (counts toward the max), tied to host
+    for (var hostName in responseMap) {
+      if (responseMap[hostName].playing === 'Yes' && responseMap[hostName].guest) {
+        var hp = hostName.split(',');
+        var hostDisplay = hp.length > 1 ? hp[1].trim() + ' ' + hp[0].trim() : hostName;
+        confirmed.push({
+          name: responseMap[hostName].guest,
+          walkRide: 'No preference',
+          scoring: 'No Preference',
+          isGuest: true,
+          guestOf: hostDisplay
+        });
+      }
+    }
 
     return ContentService.createTextOutput(JSON.stringify({
       confirmed: confirmed,
@@ -1208,6 +1227,27 @@ function submitRSVP(params) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var formSheet = ss.getSheetByName('Form Responses');
 
+    var guestFirst = (params.guestFirst || '').toString().trim();
+    var guestLast = (params.guestLast || '').toString().trim();
+    var guestName = (guestFirst + ' ' + guestLast).replace(/\s+/g, ' ').trim();
+    var playingYes = (params.playing === 'Yes');
+
+    // A guest must be a true guest, not an existing active player
+    if (playingYes && guestName) {
+      var playersData = ss.getSheetByName('Players').getDataRange().getValues();
+      var guestKey = guestName.toLowerCase();
+      for (var i = 1; i < playersData.length; i++) {
+        if ((playersData[i][4] || '').toString().trim().toLowerCase() !== 'yes') continue;
+        var full = ((playersData[i][1] || '') + ' ' + (playersData[i][2] || ''))
+          .toString().toLowerCase().replace(/\s+/g, ' ').trim();
+        if (full && full === guestKey) {
+          return ContentService.createTextOutput(JSON.stringify({
+            error: '"' + guestName + '" is already an active player. Please have them RSVP with their own link, or enter a different guest.'
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+    }
+
     var timestamp = new Date();
     var row = [
       timestamp,
@@ -1216,7 +1256,8 @@ function submitRSVP(params) {
       params.walkRide || '',
       params.scoring || '',
       params.comments || '',
-      params.eventId || ''
+      params.eventId || '',
+      playingYes ? guestName : ''
     ];
 
     var nextRow = formSheet.getLastRow() + 1;

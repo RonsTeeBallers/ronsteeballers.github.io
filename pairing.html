@@ -357,8 +357,10 @@ function cardHTML(p, gIdx) {
   h += 'ondragend="onDragEnd(event)">';
   h += '<div class="card-name">' + p.name + '</div>';
   h += '<div class="card-tags">' + wrTag(p.walkRide) + scoreTag(p.scoring);
+  if (p.isGuest) h += '<span class="tag" style="background:#fef9e7;color:#d68910;">Guest</span>';
   if (avoid) h += '<span class="tag ta">Avoid</span>';
   h += '</div>';
+  if (p.isGuest && p.guestOf) h += '<div class="card-pref">Guest of ' + p.guestOf + '</div>';
   if (p.preferred) h += '<div class="card-pref">Prefers: ' + p.preferred + '</div>';
   if (p.comments) h += '<div class="card-note">' + p.comments + '</div>';
   h += '</div>';
@@ -532,6 +534,8 @@ function init() {
         preferred: p.preferred || '',
         avoid: p.avoid || '',
         comments: p.comments || '',
+        isGuest: !!p.isGuest,
+        guestOf: p.guestOf || '',
         assigned: false
       };
     });

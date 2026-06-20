@@ -307,10 +307,14 @@
         html += '<li class="player-item">';
         html += '<div class="player-number">' + (i + 1) + '</div>';
         html += '<div class="player-info">';
-        html += '<div class="player-name">' + player.name + '</div>';
+        html += '<div class="player-name">' + player.name
+          + (player.isGuest ? ' <span style="font-size:12px;color:#d68910;font-weight:600;">(guest of ' + player.guestOf + ')</span>' : '')
+          + '</div>';
         html += '<div class="player-tags">';
-        html += getWalkRideTag(player.walkRide);
-        html += getScoringTag(player.scoring);
+        if (!player.isGuest) {
+          html += getWalkRideTag(player.walkRide);
+          html += getScoringTag(player.scoring);
+        }
         html += '</div></div></li>';
       }
       list.innerHTML = html;

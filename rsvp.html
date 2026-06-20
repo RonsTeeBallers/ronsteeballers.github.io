@@ -257,8 +257,17 @@
         </div>
       </div>
       <div class="section">
-        <div class="section-label">Comments / Guests (optional)</div>
-        <textarea id="comments" placeholder="Guest names, special requests, anything else..."></textarea>
+        <div class="section-label">Bringing a Guest? (optional)</div>
+        <button type="button" class="btn-choice" id="btn-add-guest" style="width:100%;" onclick="showGuest()">+ Add a Guest</button>
+        <div id="guest-fields" class="hidden">
+          <input id="guest-first" type="text" placeholder="Guest first name" style="width:100%;padding:14px;border:2px solid #d0d8e4;border-radius:12px;font-size:16px;font-family:inherit;margin-bottom:8px;">
+          <input id="guest-last" type="text" placeholder="Guest last name" style="width:100%;padding:14px;border:2px solid #d0d8e4;border-radius:12px;font-size:16px;font-family:inherit;margin-bottom:8px;">
+          <button type="button" onclick="removeGuest()" style="background:none;border:none;color:#922b21;font-size:14px;font-weight:600;cursor:pointer;padding:4px;">Remove guest</button>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-label">Comments (optional)</div>
+        <textarea id="comments" placeholder="Special requests, partner preferences, anything else..."></textarea>
       </div>
     </div>
 
@@ -336,6 +345,7 @@
       document.getElementById('yes-section').classList.add('hidden');
       walkRideChoice = '';
       scoringChoice = '';
+      removeGuest();
     }
     document.getElementById('btn-submit').classList.remove('hidden');
   }
@@ -353,9 +363,34 @@
     document.getElementById('btn-scramble').className = 'btn-choice' + (choice === 'scramble' ? ' selected-score' : '');
     document.getElementById('btn-scorepref').className = 'btn-choice' + (choice === 'nopref' ? ' selected-score' : '');
   }
+
+  function showGuest() {
+    document.getElementById('btn-add-guest').classList.add('hidden');
+    document.getElementById('guest-fields').classList.remove('hidden');
+    document.getElementById('guest-first').focus();
+  }
+
+  function removeGuest() {
+    var gf = document.getElementById('guest-first');
+    var gl = document.getElementById('guest-last');
+    if (gf) gf.value = '';
+    if (gl) gl.value = '';
+    var fields = document.getElementById('guest-fields');
+    var btn = document.getElementById('btn-add-guest');
+    if (fields) fields.classList.add('hidden');
+    if (btn) btn.classList.remove('hidden');
+  }
   function submitRSVP() {
     if (!playingChoice) {
       showError('Please select Yes or No.');
+      return;
+    }
+    document.getElementById('error-msg').classList.add('hidden');
+
+    var guestFirst = (document.getElementById('guest-first').value || '').trim();
+    var guestLast = (document.getElementById('guest-last').value || '').trim();
+    if (playingChoice === 'yes' && (guestFirst || guestLast) && (!guestFirst || !guestLast)) {
+      showError('Please enter both the guest\'s first and last name, or remove the guest.');
       return;
     }
 
@@ -368,6 +403,12 @@
 
     var fnName = 'cb_submit_' + Date.now();
     window[fnName] = function(data) {
+      if (data && data.error) {
+        btn.disabled = false;
+        btn.textContent = 'Submit RSVP';
+        showError(data.error);
+        return;
+      }
       document.getElementById('form-section').classList.add('hidden');
       document.getElementById('confirmation-section').classList.remove('hidden');
       if (playingChoice === 'yes') {
@@ -387,6 +428,8 @@
       + '&playing=' + encodeURIComponent(playingChoice === 'yes' ? 'Yes' : 'No')
       + '&walkRide=' + encodeURIComponent(walkRideMap[walkRideChoice] || '')
       + '&scoring=' + encodeURIComponent(scoringMap[scoringChoice] || '')
+      + '&guestFirst=' + encodeURIComponent(guestFirst)
+      + '&guestLast=' + encodeURIComponent(guestLast)
       + '&comments=' + encodeURIComponent(document.getElementById('comments').value || '');
 
     var s = document.createElement('script');
