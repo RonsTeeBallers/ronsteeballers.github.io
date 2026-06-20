@@ -612,6 +612,7 @@ function sendBrevoEmail_(toEmail, toName, subject, htmlBody) {
       },
       payload: JSON.stringify({
         sender: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
+        replyTo: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
         to: [{ email: toEmail, name: toName || toEmail }],
         subject: subject,
         htmlContent: htmlBody
@@ -1171,6 +1172,7 @@ function sendInviteEmails(params) {
           },
           payload: JSON.stringify({
             sender: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
+            replyTo: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
             to: [{ email: recipient.email, name: recipient.firstName }],
             subject: 'Golf Outing - ' + formattedDate + ' at ' + venueName,
             htmlContent: htmlBody
