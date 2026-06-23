@@ -934,11 +934,11 @@ function buildInviteEmailHtml_(o) {
     '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
     '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
     '<div style="font-size:32px;">&#9971;</div>' +
-    '<h1 style="margin:8px 0;font-size:22px;">Golf Outing Invitation</h1>' +
+    '<h1 style="margin:8px 0;font-size:22px;">' + (o.isReminder ? 'Golf Outing Reminder' : 'Golf Outing Invitation') + '</h1>' +
     '</div>' +
     '<div style="background:white;padding:24px;border:1px solid #e0e8f0;border-top:none;">' +
     '<p style="font-size:18px;font-weight:700;color:#1a2332;">Hi ' + o.firstName + '!</p>' +
-    '<p style="color:#5d6d7e;">You\'re invited to join us for golf:</p>' +
+    '<p style="color:#5d6d7e;">' + (o.isReminder ? 'A friendly reminder &mdash; we haven\'t heard back from you yet:' : 'You\'re invited to join us for golf:') + '</p>' +
     '<div style="background:#f0f4f8;padding:16px;border-radius:8px;margin:16px 0;">' +
     '<p style="margin:4px 0;font-size:16px;font-weight:700;color:#1a2332;">&#128197; ' + o.formattedDate + '</p>' +
     '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#128205; ' + venueLink + '</p>' +
@@ -960,6 +960,24 @@ function buildInviteEmailHtml_(o) {
     '</div>';
 }
 
+// Returns a set {lowercased "Last, First": true} of players who have ANY RSVP row
+// (Yes or No) for the given event — used to skip them when sending reminders.
+function getRespondedNames_(eventId) {
+  var formSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form Responses');
+  var formData = formSheet.getDataRange().getValues();
+  var responded = {};
+  for (var i = 1; i < formData.length; i++) {
+    var nm = formData[i][1] ? formData[i][1].toString().trim().toLowerCase() : '';
+    if (!nm) continue;
+    var raw = formData[i][6];  // col G Event ID
+    var rowEventId = '';
+    if (raw instanceof Date) rowEventId = Utilities.formatDate(raw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    else if (raw) rowEventId = raw.toString().trim().replace('EVT-', '');
+    if (rowEventId === eventId) responded[nm] = true;
+  }
+  return responded;
+}
+
 // Build a one-recipient preview of the invite (no email is sent).
 function previewInvite(params) {
   try {
@@ -971,6 +989,8 @@ function previewInvite(params) {
     var eventId = params.eventId;
     var mailingList = params.mailingList;
     var comment = params.comment || '';
+    var remindOnly = (params.remindOnly === 'true' || params.remindOnly === true);
+    var responded = remindOnly ? getRespondedNames_(eventId) : {};
 
     var eventsData = eventsSheet.getDataRange().getValues();
     var eventRow = null;
@@ -1026,6 +1046,7 @@ function previewInvite(params) {
       if (mailingList === 'Indian Lakes' && indianLakes === 'Yes') include = true;
       if (mailingList === 'X-Golf' && xGolf === 'Yes') include = true;
       if (mailingList === 'Indian Lakes & X-Golf' && (indianLakes === 'Yes' || xGolf === 'Yes')) include = true;
+      if (include && remindOnly && responded[playersData[p][0].toString().trim().toLowerCase()]) include = false;
       if (include) {
         if (count === 0) {
           sampleName = playersData[p][1].toString().trim() || 'Friend';
@@ -1043,6 +1064,7 @@ function previewInvite(params) {
       timeStr: timeStr, slotsReserved: slotsReserved,
       greenFee: greenFee, cartFee: cartFee, total: total,
       comment: comment,
+      isReminder: remindOnly,
       notes: eventRow[6] ? eventRow[6].toString() : '',
       rsvpUrl: baseUrl + '/rsvp.html?event=' + eventId + '&player=' + sampleSlug,
       signupUrl: baseUrl + '/signup.html?event=' + eventId
@@ -1051,7 +1073,7 @@ function previewInvite(params) {
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
       html: html,
-      subject: 'Golf Outing - ' + formattedDate + ' at ' + venueName,
+      subject: (remindOnly ? 'Reminder: ' : '') + 'Golf Outing - ' + formattedDate + ' at ' + venueName,
       count: count,
       mailingList: mailingList,
       sampleName: sampleName
@@ -1073,6 +1095,8 @@ function sendInviteEmails(params) {
     var eventId = params.eventId;
     var mailingList = params.mailingList;
     var comment = params.comment || '';
+    var remindOnly = (params.remindOnly === 'true' || params.remindOnly === true);
+    var responded = remindOnly ? getRespondedNames_(eventId) : {};
 
     // Get event details
     var eventsData = eventsSheet.getDataRange().getValues();
@@ -1140,6 +1164,7 @@ function sendInviteEmails(params) {
       if (mailingList === 'Indian Lakes' && indianLakes === 'Yes') include = true;
       if (mailingList === 'X-Golf' && xGolf === 'Yes') include = true;
       if (mailingList === 'Indian Lakes & X-Golf' && (indianLakes === 'Yes' || xGolf === 'Yes')) include = true;
+      if (include && remindOnly && responded[lastFirst.toLowerCase()]) include = false;
 
       if (include) {
         var slug = lastFirst.toLowerCase()
@@ -1181,7 +1206,7 @@ function sendInviteEmails(params) {
         formattedDate: formattedDate, venueName: venueName, venueUrl: venueUrl,
         timeStr: timeStr, slotsReserved: slotsReserved,
         greenFee: greenFee, cartFee: cartFee, total: total,
-        comment: comment, notes: eventRow[6] ? eventRow[6].toString() : '',
+        comment: comment, isReminder: remindOnly, notes: eventRow[6] ? eventRow[6].toString() : '',
         rsvpUrl: rsvpUrl, signupUrl: signupUrl
       });
 
@@ -1196,7 +1221,7 @@ function sendInviteEmails(params) {
             sender: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
             replyTo: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
             to: [{ email: recipient.email, name: recipient.firstName }],
-            subject: 'Golf Outing - ' + formattedDate + ' at ' + venueName,
+            subject: (remindOnly ? 'Reminder: ' : '') + 'Golf Outing - ' + formattedDate + ' at ' + venueName,
             htmlContent: htmlBody
           }),
           muteHttpExceptions: true

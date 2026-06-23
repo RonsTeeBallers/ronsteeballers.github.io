@@ -284,6 +284,26 @@
     </div>
   </div>
 </div>
+
+<div class="modal-overlay" id="remind-modal">
+  <div class="modal">
+    <h2>Preview &amp; Send Reminder</h2>
+    <div id="remind-details" style="background:#eaf2ff;padding:12px;border-radius:8px;margin-bottom:16px;font-size:14px;color:#1a2332;"></div>
+    <div class="form-group">
+      <label class="form-label">Your message (editable — appears at the top of the reminder)</label>
+      <textarea class="form-input" id="remind-message" rows="3" style="resize:vertical;" onchange="loadRemindPreview()"></textarea>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Preview — exactly what non-responders receive</label>
+      <div id="remind-preview-status" style="font-size:13px;color:#5d6d7e;margin-bottom:8px;">Loading preview…</div>
+      <iframe id="remind-frame" title="Reminder preview" style="width:100%;height:360px;border:1px solid #d0d8e4;border-radius:8px;background:white;"></iframe>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideRemindPreview()">Cancel</button>
+      <button class="btn btn-primary" id="btn-send-remind" onclick="sendReminders()">Send Reminders</button>
+    </div>
+  </div>
+</div>
   
 <!-- Create Event Modal -->
 <div class="modal-overlay" id="create-modal">
@@ -463,6 +483,7 @@
         html += '<div class="event-actions">';
         html += '<button class="btn btn-secondary" onclick="viewPlayers(\'' + event.id + '\')">Players</button>';
         html += '<button class="btn btn-primary" onclick="showInvitePreview(\'' + event.id + '\',\'' + event.venue + '\',\'' + event.mailingList + '\')">Invite</button>';
+        html += '<button class="btn btn-secondary" onclick="showRemindPreview(\'' + event.id + '\',\'' + event.venue + '\',\'' + event.mailingList + '\',' + Math.max(0, event.totalSlots - event.confirmed) + ')">Remind</button>';
         html += '<button class="btn btn-primary" onclick="goToPairing(\'' + event.id + '\')">Pair</button>';
         html += '</div>';
         html += '</div>';
@@ -540,6 +561,74 @@ function viewPlayers(eventId) {
     });
   }
   
+  // ── Remind non-responders ─────────────────────────────────────────
+  var currentRemindEventId = '';
+  var currentRemindMailingList = '';
+
+  function showRemindPreview(eventId, venue, mailingList, openSpots) {
+    currentRemindEventId = eventId;
+    currentRemindMailingList = mailingList;
+    var spotWord = (openSpots === 1) ? 'spot' : 'spots';
+    document.getElementById('remind-message').value =
+      'Quick reminder -- we have ' + openSpots + ' ' + spotWord + ' open for ' + venue +
+      '. Tap I\'M IN below to grab a spot. Thanks! -- Ron';
+    document.getElementById('remind-details').textContent = venue + ' — ' + formatDate(eventId);
+    document.getElementById('btn-send-remind').disabled = false;
+    document.getElementById('btn-send-remind').textContent = 'Send Reminders';
+    document.getElementById('remind-frame').srcdoc = '';
+    document.getElementById('remind-modal').classList.add('show');
+    loadRemindPreview();
+  }
+
+  function loadRemindPreview() {
+    var status = document.getElementById('remind-preview-status');
+    status.textContent = 'Loading preview…';
+    jsonpCall('previewInvite', {
+      eventId: currentRemindEventId,
+      mailingList: currentRemindMailingList,
+      remindOnly: 'true',
+      comment: document.getElementById('remind-message').value
+    }, function(data) {
+      if (data && data.success) {
+        document.getElementById('remind-frame').srcdoc = data.html;
+        status.textContent = 'Will remind ' + data.count + ' player' +
+          (data.count === 1 ? '' : 's') + " who haven't responded" +
+          (data.count === 0 ? ' — everyone has replied!' : '');
+        var sb = document.getElementById('btn-send-remind');
+        sb.textContent = data.count > 0 ? 'Send to ' + data.count : 'Send Reminders';
+        sb.disabled = data.count === 0;
+      } else {
+        status.textContent = 'Preview error: ' + ((data && data.error) || 'unknown');
+      }
+    });
+  }
+
+  function hideRemindPreview() {
+    document.getElementById('remind-modal').classList.remove('show');
+  }
+
+  function sendReminders() {
+    var btn = document.getElementById('btn-send-remind');
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    jsonpCall('sendInviteEmails', {
+      eventId: currentRemindEventId,
+      mailingList: currentRemindMailingList,
+      remindOnly: 'true',
+      comment: document.getElementById('remind-message').value
+    }, function(data) {
+      btn.disabled = false;
+      btn.textContent = 'Send Reminders';
+      if (data && data.success) {
+        hideRemindPreview();
+        showToast('Sent ' + data.sent + ' reminder' + (data.sent === 1 ? '' : 's') + '!');
+      } else {
+        document.getElementById('remind-preview-status').textContent =
+          'Send error: ' + ((data && data.error) || 'Unknown error');
+      }
+    });
+  }
+
   function showCreateEvent() {
     loadVenues();
     document.getElementById('create-error').style.display = 'none';
