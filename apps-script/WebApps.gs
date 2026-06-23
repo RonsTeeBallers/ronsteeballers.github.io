@@ -4,7 +4,7 @@ function doGet(e) {
   var callback = params.callback || '';
   var result;
 
-  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true };
+  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, broadcastEmail: true };
   if (GUARDED[action] && !passcodeOk_(params)) {
     result = ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized: invalid organizer passcode'}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -28,6 +28,10 @@ function doGet(e) {
     result = sendInviteEmails(params);
   } else if (action === 'previewInvite') {
     result = previewInvite(params);
+  } else if (action === 'broadcastPreview') {
+    result = broadcastPreview();
+  } else if (action === 'broadcastEmail') {
+    result = broadcastEmail(params);
   } else if (action === 'checkPasscode') {
     result = checkPasscode(params);
   } else if (action === 'submitRSVP') {
@@ -660,6 +664,90 @@ function testBrevoSend() {
     '<p style="margin:0;padding-left:20px;">Test Player (Walk)</p>'
   );
   Logger.log(JSON.stringify(result));
+}
+
+// ── Broadcast: general email to all active players (not tied to an event) ──
+
+// Wrap the organizer's free-text body in a simple branded email shell.
+function buildBroadcastEmailHtml_(bodyText) {
+  var safe = (bodyText || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+  return '<meta charset="utf-8">' +
+    '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
+    '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
+    '<div style="font-size:32px;">&#9971;</div>' +
+    '<h1 style="margin:8px 0;font-size:22px;">RonsTeeBallers</h1>' +
+    '</div>' +
+    '<div style="background:white;padding:24px;border:1px solid #e0e8f0;border-top:none;font-size:16px;color:#1a2332;line-height:1.6;">' +
+    safe +
+    '</div>' +
+    '<div style="background:#f0f4f8;padding:12px;border-radius:0 0 12px 12px;text-align:center;">' +
+    '<p style="color:#aab7c4;font-size:12px;margin:0;">RonsTeeBallers Golf Group</p>' +
+    '</div>' +
+    '</div>';
+}
+
+// Count active players with a valid email (no PII returned). Unguarded — safe to preview.
+function broadcastPreview() {
+  try {
+    var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
+    var count = 0;
+    for (var p = 1; p < playersData.length; p++) {
+      var active = playersData[p][4].toString().trim();
+      var email = playersData[p][3].toString().trim();
+      if (active === 'Yes' && email && email.indexOf('@') !== -1) count++;
+    }
+    return ContentService.createTextOutput(JSON.stringify({ success: true, count: count }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// Send a general email (custom subject + body) to all active players. Guarded by passcode.
+function broadcastEmail(params) {
+  try {
+    var subject = (params.subject || '').toString().trim();
+    var body = (params.body || '').toString();
+    if (!subject) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Subject is empty'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    if (!body.trim()) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Message body is empty'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
+    var recipients = [];
+    for (var p = 1; p < playersData.length; p++) {
+      var active = playersData[p][4].toString().trim();
+      var email = playersData[p][3].toString().trim();
+      var firstName = playersData[p][1].toString().trim();
+      if (active === 'Yes' && email && email.indexOf('@') !== -1) {
+        recipients.push({ email: email, firstName: firstName });
+      }
+    }
+    if (recipients.length === 0) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'No active players with a valid email'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var htmlBody = buildBroadcastEmailHtml_(body);
+    var sent = 0;
+    var errors = [];
+    recipients.forEach(function(r) {
+      var res = sendBrevoEmail_(r.email, r.firstName, subject, htmlBody);
+      if (res.ok) sent++; else errors.push(r.email + ': ' + res.error);
+    });
+
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true, sent: sent, total: recipients.length, errors: errors
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 // Organizer statistics, computed from Pairing History + Players + Form Responses.
