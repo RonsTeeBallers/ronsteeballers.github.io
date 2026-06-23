@@ -1017,13 +1017,15 @@ function previewInvite(params) {
     var sampleSlug = 'sample-player';
     for (var p = 1; p < playersData.length; p++) {
       var active = playersData[p][4].toString().trim();
-      var special = playersData[p][5].toString().trim();
+      var indianLakes = playersData[p][5].toString().trim();  // col F Yes/No
+      var xGolf = playersData[p][6].toString().trim();         // col G Yes/No
       var email = playersData[p][3].toString().trim();
       if (!email || email.indexOf('@') === -1) continue;
       var include = false;
       if (mailingList === 'Main Group' && active === 'Yes') include = true;
-      if (mailingList === 'Monday' && special === 'Yes') include = true;
-      if (mailingList === 'Indoor' && special === 'Indoor') include = true;
+      if (mailingList === 'Indian Lakes' && indianLakes === 'Yes') include = true;
+      if (mailingList === 'X-Golf' && xGolf === 'Yes') include = true;
+      if (mailingList === 'Indian Lakes & X-Golf' && (indianLakes === 'Yes' || xGolf === 'Yes')) include = true;
       if (include) {
         if (count === 0) {
           sampleName = playersData[p][1].toString().trim() || 'Friend';
@@ -1124,8 +1126,8 @@ function sendInviteEmails(params) {
     var recipients = [];
     for (var p = 1; p < playersData.length; p++) {
       var active = playersData[p][4].toString().trim();
-      var mondayPlayer = playersData[p][5].toString().trim();
-      var specialInvitations = playersData[p][5].toString().trim();
+      var indianLakes = playersData[p][5].toString().trim();  // col F Yes/No
+      var xGolf = playersData[p][6].toString().trim();         // col G Yes/No
       var email = playersData[p][3].toString().trim();
       var firstName = playersData[p][1].toString().trim();
       var lastName = playersData[p][2].toString().trim();
@@ -1135,8 +1137,9 @@ function sendInviteEmails(params) {
 
       var include = false;
       if (mailingList === 'Main Group' && active === 'Yes') include = true;
-      if (mailingList === 'Monday' && (mondayPlayer === 'Yes')) include = true;
-      if (mailingList === 'Indoor' && specialInvitations === 'Indoor') include = true;
+      if (mailingList === 'Indian Lakes' && indianLakes === 'Yes') include = true;
+      if (mailingList === 'X-Golf' && xGolf === 'Yes') include = true;
+      if (mailingList === 'Indian Lakes & X-Golf' && (indianLakes === 'Yes' || xGolf === 'Yes')) include = true;
 
       if (include) {
         var slug = lastFirst.toLowerCase()
