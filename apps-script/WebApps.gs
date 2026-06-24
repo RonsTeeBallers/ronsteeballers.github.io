@@ -20,6 +20,8 @@ function doGet(e) {
     result = createEvent(params);
   } else if (action === 'savePairings') {
     result = savePairings(params);
+  } else if (action === 'previewPairings') {
+    result = previewPairings(params);
   } else if (action === 'getEventInfo') {
     result = getEventInfo(params.eventId);
   } else if (action === 'getStats') {
@@ -514,28 +516,12 @@ function savePairings(params) {
       row++;
     });
 
-    // Build email body
-    var emailLines = [];
-    foursomes.forEach(function(foursome, idx) {
-      var fsMinutes = startMinutes + idx * teeTimeInterval;
-      var fh = Math.floor(fsMinutes / 60);
-      var fm = fsMinutes % 60;
-      var fap = fh >= 12 ? 'PM' : 'AM';
-      fh = fh % 12 || 12;
-      var teeTimeStr = fh + ':' + (fm < 10 ? '0' + fm : fm) + ' ' + fap;
-      emailLines.push('<p><strong>Foursome ' + (idx + 1) + ' - ' + teeTimeStr + '</strong></p>');
-      foursome.forEach(function(player) {
-        emailLines.push('<p style="margin:0;padding-left:20px;">' + player.name + ' (' + player.walkRide + ')</p>');
-      });
-      emailLines.push('<br>');
+    // Build email body (shared with previewPairings)
+    var htmlBody = buildPairingsEmailHtml_({
+      formattedDate: formattedDate, venueName: venueName,
+      foursomes: foursomes, startMinutes: startMinutes,
+      teeTimeInterval: teeTimeInterval, comment: params.comment || ''
     });
-
-    var htmlBody =
-      '<p>Gentlemen,</p>' +
-      '<p>Here are the pairings for ' + formattedDate + ' at ' + venueName + ':</p>' +
-      emailLines.join('') +
-      '<p>Tee times reserved under Ron Blanton.</p>' +
-      '<p>See you on the course!</p>';
 
     var subject = 'Golf Pairings - ' + formattedDate + ' at ' + venueName;
 
@@ -617,6 +603,162 @@ function savePairings(params) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 
+}
+
+// Build the pairings email HTML. Shared by savePairings (real send) and
+// previewPairings (no-send preview) so they never drift apart.
+// o = { formattedDate, venueName, foursomes, startMinutes, teeTimeInterval, comment }
+function buildPairingsEmailHtml_(o) {
+  // One styled block per foursome, matching the invite's card look.
+  var foursomeBlocks = o.foursomes.map(function(foursome, idx) {
+    var fsMinutes = o.startMinutes + idx * o.teeTimeInterval;
+    var fh = Math.floor(fsMinutes / 60);
+    var fm = fsMinutes % 60;
+    var fap = fh >= 12 ? 'PM' : 'AM';
+    fh = fh % 12 || 12;
+    var teeTimeStr = fh + ':' + (fm < 10 ? '0' + fm : fm) + ' ' + fap;
+
+    var playerRows = foursome.map(function(player) {
+      return '<p style="margin:4px 0;font-size:15px;color:#1a2332;">' +
+        player.name + ' <span style="color:#5d6d7e;font-size:13px;">(' + player.walkRide + ')</span></p>';
+    }).join('');
+
+    return '<div style="background:#f0f4f8;padding:14px 16px;border-radius:8px;margin:0 0 12px;">' +
+      '<p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#1a5276;">&#9971; Foursome ' + (idx + 1) +
+      ' <span style="color:#5d6d7e;font-weight:400;font-size:14px;">&mdash; ' + teeTimeStr + '</span></p>' +
+      playerRows +
+      '</div>';
+  }).join('');
+
+  var commentSection = o.comment
+    ? '<p style="background:#eaf2ff;padding:12px;border-radius:8px;border-left:3px solid #1a5276;color:#1a2332;font-size:15px;line-height:1.5;">' + o.comment + '</p>'
+    : '';
+
+  return '<meta charset="utf-8">' +
+    '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
+    '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
+    '<div style="font-size:32px;">&#9971;</div>' +
+    '<h1 style="margin:8px 0;font-size:22px;">Golf Pairings</h1>' +
+    '</div>' +
+    '<div style="background:white;padding:24px;border:1px solid #e0e8f0;border-top:none;">' +
+    '<p style="font-size:18px;font-weight:700;color:#1a2332;">Gentlemen,</p>' +
+    '<p style="color:#5d6d7e;">Here are the pairings for ' + o.formattedDate + ' at ' + o.venueName + ':</p>' +
+    commentSection +
+    foursomeBlocks +
+    '<p style="color:#5d6d7e;font-size:14px;">Tee times reserved under the name Ron Blanton.</p>' +
+    '</div>' +
+    '<div style="background:#f0f4f8;padding:12px;border-radius:0 0 12px 12px;text-align:center;">' +
+    '<p style="color:#aab7c4;font-size:12px;margin:0;">See you on the course!</p>' +
+    '</div>' +
+    '</div>';
+}
+
+// Build a no-send preview of the pairings email (mirrors previewInvite).
+// Does NOT write Draft Pairings, history, send email, or close the event.
+function previewPairings(params) {
+  try {
+    var ss = SpreadsheetApp.getActiveSpreadsheet();
+    var eventsSheet = ss.getSheetByName('Events');
+    var eventId = params.eventId;
+
+    var foursomes = (params.foursomes || '').split(';').map(function(fsStr) {
+      if (!fsStr) return [];
+      return fsStr.split(',').map(function(playerStr) {
+        var parts = playerStr.split('|');
+        return { name: parts[0], walkRide: parts[1] || 'No preference' };
+      });
+    });
+
+    // Find the event row
+    var eventsData = eventsSheet.getDataRange().getValues();
+    var eventRow = null;
+    for (var i = 1; i < eventsData.length; i++) {
+      var eventDate = eventsData[i][0];
+      var dateStr = eventDate instanceof Date
+        ? Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+        : eventDate.toString().trim();
+      if (dateStr === eventId) { eventRow = eventsData[i]; break; }
+    }
+    if (!eventRow) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var venueName = eventRow[1].toString();
+    var formattedDate = eventRow[0] instanceof Date
+      ? Utilities.formatDate(eventRow[0], Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy')
+      : eventRow[0].toString();
+
+    // Tee time interval from Courses tab
+    var coursesSheet = ss.getSheetByName('Courses');
+    var courseData = coursesSheet.getDataRange().getValues();
+    var teeTimeInterval = 9;
+    for (var c = 1; c < courseData.length; c++) {
+      if (courseData[c][0].toString() === venueName) {
+        var interval = parseInt(courseData[c][10]);
+        if (!isNaN(interval) && interval > 0) teeTimeInterval = interval;
+        break;
+      }
+    }
+
+    // Starting tee time -> minutes
+    var startTime = eventRow[2];
+    var startStr = startTime instanceof Date
+      ? Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'h:mm a')
+      : startTime.toString();
+    var startMinutes = 0;
+    var timeParts = startStr.match(/(\d+):(\d+)\s*(AM|PM)/i);
+    if (timeParts) {
+      var h = parseInt(timeParts[1]);
+      var m = parseInt(timeParts[2]);
+      var ap = timeParts[3].toUpperCase();
+      if (ap === 'PM' && h !== 12) h += 12;
+      if (ap === 'AM' && h === 12) h = 0;
+      startMinutes = h * 60 + m;
+    }
+
+    var htmlBody = buildPairingsEmailHtml_({
+      formattedDate: formattedDate, venueName: venueName,
+      foursomes: foursomes, startMinutes: startMinutes,
+      teeTimeInterval: teeTimeInterval, comment: params.comment || ''
+    });
+
+    // Count unique recipients that map to a Players-tab email (mirrors savePairings)
+    var playersSheet = ss.getSheetByName('Players');
+    var playersData = playersSheet.getDataRange().getValues();
+    var emailByName = {};
+    for (var pi = 1; pi < playersData.length; pi++) {
+      var pEmail = playersData[pi][3].toString().trim();
+      if (!pEmail || pEmail.indexOf('@') === -1) continue;
+      var key = (playersData[pi][1].toString().trim() + ' ' + playersData[pi][2].toString().trim()).toLowerCase().trim();
+      emailByName[key] = true;
+    }
+    var seen = {};
+    var count = 0;
+    var unmatched = [];
+    foursomes.forEach(function(foursome) {
+      foursome.forEach(function(player) {
+        var lookup = player.name.toLowerCase().trim();
+        if (emailByName[lookup]) {
+          if (!seen[lookup]) { seen[lookup] = true; count++; }
+        } else if (player.name.trim() !== '') {
+          unmatched.push(player.name);
+        }
+      });
+    });
+
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true,
+      html: htmlBody,
+      subject: 'Golf Pairings - ' + formattedDate + ' at ' + venueName,
+      count: count,
+      unmatched: unmatched
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }
 
 // Shared helper: send one transactional email through Brevo.
