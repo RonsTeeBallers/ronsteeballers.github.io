@@ -31,7 +31,7 @@ function doGet(e) {
   } else if (action === 'previewInvite') {
     result = previewInvite(params);
   } else if (action === 'broadcastPreview') {
-    result = broadcastPreview();
+    result = broadcastPreview(params);
   } else if (action === 'broadcastEmail') {
     result = broadcastEmail(params);
   } else if (action === 'checkPasscode') {
@@ -279,6 +279,26 @@ function createEvent(params) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = ss.getSheetByName('Events');
     var date = new Date(params.date + 'T12:00:00');
+
+    // Block a second outing on a date that already has one. The event date is the
+    // unique event ID across V2 (RSVPs, pairings, reminders all key on it), so a
+    // duplicate date would silently collide. params.date is yyyy-MM-dd.
+    var newDateStr = params.date.toString().trim();
+    var existing = sheet.getDataRange().getValues();
+    for (var e = 1; e < existing.length; e++) {
+      var ed = existing[e][0];
+      var edStr = ed instanceof Date
+        ? Utilities.formatDate(ed, Session.getScriptTimeZone(), 'yyyy-MM-dd')
+        : ed.toString().trim();
+      if (edStr === newDateStr) {
+        var pretty = Utilities.formatDate(date, Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy');
+        return ContentService.createTextOutput(JSON.stringify({
+          error: 'An outing is already scheduled for ' + pretty + '. Only one outing per date is allowed - edit or delete the existing event first.',
+          duplicate: true
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
     var timeParts = params.time.split(':');
     var teeTime = new Date(1970, 0, 1, parseInt(timeParts[0]), parseInt(timeParts[1]));
     sheet.appendRow([
@@ -817,16 +837,51 @@ function buildBroadcastEmailHtml_(bodyText) {
 }
 
 // Count active players with a valid email (no PII returned). Unguarded — safe to preview.
-function broadcastPreview() {
+// Single source of truth for who receives an email for a given group.
+// group: 'Main Group' | 'Indian Lakes' | 'X-Golf' | 'Indian Lakes & X-Golf'.
+// Rules: a player must be Active (col E = 'Yes') AND have a valid email to be included
+// at all - inactive players are NEVER emailed. Indian Lakes (col F) / X-Golf (col G)
+// groups additionally require that group's own flag = 'Yes'. Optional excludeResponded
+// is a map {lowercased "Last, First": true} of people to drop (used for reminders).
+// Returns [{lastFirst, firstName, lastName, email, slug}, ...] in sheet order.
+function selectRecipients_(group, excludeResponded) {
+  var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
+  var out = [];
+  for (var p = 1; p < playersData.length; p++) {
+    var active = playersData[p][4].toString().trim();
+    if (active !== 'Yes') continue;                       // never email inactive players
+    var email = playersData[p][3].toString().trim();
+    if (!email || email.indexOf('@') === -1) continue;
+    var indianLakes = playersData[p][5].toString().trim();  // col F Yes/No
+    var xGolf = playersData[p][6].toString().trim();         // col G Yes/No
+
+    var include = false;
+    if (group === 'Main Group') include = true;
+    else if (group === 'Indian Lakes') include = (indianLakes === 'Yes');
+    else if (group === 'X-Golf') include = (xGolf === 'Yes');
+    else if (group === 'Indian Lakes & X-Golf') include = (indianLakes === 'Yes' || xGolf === 'Yes');
+    if (!include) continue;
+
+    var lastFirst = playersData[p][0].toString().trim();
+    if (excludeResponded && excludeResponded[lastFirst.toLowerCase()]) continue;
+
+    out.push({
+      lastFirst: lastFirst,
+      firstName: playersData[p][1].toString().trim(),
+      lastName: playersData[p][2].toString().trim(),
+      email: email,
+      slug: lastFirst.toLowerCase()
+        .replace(/,\s*/g, '-').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '')
+    });
+  }
+  return out;
+}
+
+function broadcastPreview(params) {
   try {
-    var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
-    var count = 0;
-    for (var p = 1; p < playersData.length; p++) {
-      var active = playersData[p][4].toString().trim();
-      var email = playersData[p][3].toString().trim();
-      if (active === 'Yes' && email && email.indexOf('@') !== -1) count++;
-    }
-    return ContentService.createTextOutput(JSON.stringify({ success: true, count: count }))
+    var group = (params && params.group) || 'Main Group';
+    var count = selectRecipients_(group).length;
+    return ContentService.createTextOutput(JSON.stringify({ success: true, count: count, group: group }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
     return ContentService.createTextOutput(JSON.stringify({error: e.message}))
@@ -834,7 +889,8 @@ function broadcastPreview() {
   }
 }
 
-// Send a general email (custom subject + body) to all active players. Guarded by passcode.
+// Send a general email (custom subject + body) to active players in the chosen group
+// (Main Group / Indian Lakes / X-Golf). Recipient selection via selectRecipients_.
 function broadcastEmail(params) {
   try {
     var subject = (params.subject || '').toString().trim();
@@ -848,18 +904,10 @@ function broadcastEmail(params) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
-    var recipients = [];
-    for (var p = 1; p < playersData.length; p++) {
-      var active = playersData[p][4].toString().trim();
-      var email = playersData[p][3].toString().trim();
-      var firstName = playersData[p][1].toString().trim();
-      if (active === 'Yes' && email && email.indexOf('@') !== -1) {
-        recipients.push({ email: email, firstName: firstName });
-      }
-    }
+    var group = (params.group || 'Main Group').toString();
+    var recipients = selectRecipients_(group);
     if (recipients.length === 0) {
-      return ContentService.createTextOutput(JSON.stringify({error: 'No active players with a valid email'}))
+      return ContentService.createTextOutput(JSON.stringify({error: 'No active players with a valid email for group: ' + group}))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -1253,32 +1301,11 @@ function previewInvite(params) {
       }
     }
 
-    // Count recipients + pick a sample name, mirroring sendInviteEmails' selection
-    var playersData = playersSheet.getDataRange().getValues();
-    var count = 0;
-    var sampleName = 'Friend';
-    var sampleSlug = 'sample-player';
-    for (var p = 1; p < playersData.length; p++) {
-      var active = playersData[p][4].toString().trim();
-      var indianLakes = playersData[p][5].toString().trim();  // col F Yes/No
-      var xGolf = playersData[p][6].toString().trim();         // col G Yes/No
-      var email = playersData[p][3].toString().trim();
-      if (!email || email.indexOf('@') === -1) continue;
-      var include = false;
-      if (mailingList === 'Main Group' && active === 'Yes') include = true;
-      if (mailingList === 'Indian Lakes' && indianLakes === 'Yes') include = true;
-      if (mailingList === 'X-Golf' && xGolf === 'Yes') include = true;
-      if (mailingList === 'Indian Lakes & X-Golf' && (indianLakes === 'Yes' || xGolf === 'Yes')) include = true;
-      if (include && remindOnly && responded[playersData[p][0].toString().trim().toLowerCase()]) include = false;
-      if (include) {
-        if (count === 0) {
-          sampleName = playersData[p][1].toString().trim() || 'Friend';
-          sampleSlug = playersData[p][0].toString().trim().toLowerCase()
-            .replace(/,\s*/g, '-').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-        }
-        count++;
-      }
-    }
+    // Count recipients + pick a sample name (same active-gated selection as the send).
+    var recipients = selectRecipients_(mailingList, responded);
+    var count = recipients.length;
+    var sampleName = count ? (recipients[0].firstName || 'Friend') : 'Friend';
+    var sampleSlug = count ? recipients[0].slug : 'sample-player';
 
     var baseUrl = 'https://ronsteeballers.github.io';
     var html = buildInviteEmailHtml_({
@@ -1371,40 +1398,8 @@ function sendInviteEmails(params) {
       }
     }
 
-    // Get players for this mailing list
-    var playersData = playersSheet.getDataRange().getValues();
-    var recipients = [];
-    for (var p = 1; p < playersData.length; p++) {
-      var active = playersData[p][4].toString().trim();
-      var indianLakes = playersData[p][5].toString().trim();  // col F Yes/No
-      var xGolf = playersData[p][6].toString().trim();         // col G Yes/No
-      var email = playersData[p][3].toString().trim();
-      var firstName = playersData[p][1].toString().trim();
-      var lastName = playersData[p][2].toString().trim();
-      var lastFirst = playersData[p][0].toString().trim();
-
-      if (!email || email.indexOf('@') === -1) continue;
-
-      var include = false;
-      if (mailingList === 'Main Group' && active === 'Yes') include = true;
-      if (mailingList === 'Indian Lakes' && indianLakes === 'Yes') include = true;
-      if (mailingList === 'X-Golf' && xGolf === 'Yes') include = true;
-      if (mailingList === 'Indian Lakes & X-Golf' && (indianLakes === 'Yes' || xGolf === 'Yes')) include = true;
-      if (include && remindOnly && responded[lastFirst.toLowerCase()]) include = false;
-
-      if (include) {
-        var slug = lastFirst.toLowerCase()
-          .replace(/,\s*/g, '-')
-          .replace(/\s+/g, '-')
-          .replace(/[^a-z0-9-]/g, '');
-
-        recipients.push({
-          firstName: firstName,
-          email: email,
-          slug: slug
-        });
-      }
-    }
+    // Get players for this mailing list (active-gated; reminders skip responders).
+    var recipients = selectRecipients_(mailingList, responded);
 
     if (recipients.length === 0) {
       return ContentService.createTextOutput(JSON.stringify({error: 'No recipients found for mailing list: ' + mailingList}))

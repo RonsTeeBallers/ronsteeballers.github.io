@@ -265,7 +265,7 @@
     </button>
     <button class="tool-btn" onclick="showBroadcast()">
       <span class="icon">📧</span>
-      <span>Send email to all active players</span>
+      <span>Send email to active players</span>
       <span class="arrow">›</span>
     </button>
   </div>
@@ -312,8 +312,16 @@
 
 <div class="modal-overlay" id="broadcast-modal">
   <div class="modal">
-    <h2>Send Email to All Active Players</h2>
+    <h2>Send Email to Active Players</h2>
     <div id="broadcast-info" style="background:#eaf2ff;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;color:#1a2332;">Loading recipient count…</div>
+    <div class="form-group">
+      <label class="form-label">Group</label>
+      <select class="form-input" id="broadcast-group" onchange="loadBroadcastCount()">
+        <option value="Main Group">Main Group</option>
+        <option value="Indian Lakes">Indian Lakes</option>
+        <option value="X-Golf">X-Golf</option>
+      </select>
+    </div>
     <div class="form-group">
       <label class="form-label">Subject</label>
       <input class="form-input" id="broadcast-subject" type="text" value="RonsTeeBallers - General Communication">
@@ -653,18 +661,25 @@ function viewPlayers(eventId) {
     });
   }
 
-  // ── Broadcast email to all active players ─────────────────────────
+  // ── Broadcast email to active players in a selected group ─────────
   function showBroadcast() {
+    document.getElementById('broadcast-group').value = 'Main Group';
     document.getElementById('broadcast-subject').value = 'RonsTeeBallers - General Communication';
     document.getElementById('broadcast-body').value = '';
-    document.getElementById('broadcast-info').textContent = 'Loading recipient count…';
     document.getElementById('btn-send-broadcast').disabled = false;
     document.getElementById('btn-send-broadcast').textContent = 'Send to All';
     document.getElementById('broadcast-modal').classList.add('show');
-    jsonpCall('broadcastPreview', {}, function(data) {
+    loadBroadcastCount();
+  }
+
+  // Refresh the recipient count for the currently selected group.
+  function loadBroadcastCount() {
+    var group = document.getElementById('broadcast-group').value;
+    document.getElementById('broadcast-info').textContent = 'Loading recipient count…';
+    jsonpCall('broadcastPreview', { group: group }, function(data) {
       if (data && data.success) {
         document.getElementById('broadcast-info').textContent =
-          'This will email ' + data.count + ' active player' + (data.count === 1 ? '' : 's') +
+          'This will email ' + data.count + ' active ' + group + ' player' + (data.count === 1 ? '' : 's') +
           '. (Brevo free tier allows ~300 emails/day.)';
       } else {
         document.getElementById('broadcast-info').textContent =
@@ -678,15 +693,16 @@ function viewPlayers(eventId) {
   }
 
   function sendBroadcast() {
+    var group = document.getElementById('broadcast-group').value;
     var subject = document.getElementById('broadcast-subject').value.trim();
     var body = document.getElementById('broadcast-body').value;
     if (!subject) { showToast('Please enter a subject.'); return; }
     if (!body.trim()) { showToast('Please enter a message.'); return; }
-    if (!confirm('Send this email to all active players?')) return;
+    if (!confirm('Send this email to all active ' + group + ' players?')) return;
     var btn = document.getElementById('btn-send-broadcast');
     btn.disabled = true;
     btn.textContent = 'Sending...';
-    jsonpCall('broadcastEmail', { subject: subject, body: body }, function(data) {
+    jsonpCall('broadcastEmail', { group: group, subject: subject, body: body }, function(data) {
       btn.disabled = false;
       btn.textContent = 'Send to All';
       if (data && data.success) {
