@@ -54,5 +54,12 @@ you can paste the new file into the GitHub web editor.)
 - `testBrevoSend()` is a manual test that emails only you.
 - The invite send (`sendInviteEmails`) was already using Brevo — unchanged,
   except a misleading "Resend" error message was corrected to "Brevo".
-- Legacy v1 menu functions (Thursday/Monday invites & pairings drafts) were
-  left untouched so your current process keeps working until v2 is proven.
+- Legacy v1 menu functions (Thursday/Monday invites & pairings drafts) have
+  now been **removed** — v2 is the only path. The following files were deleted
+  from the repo and should also be deleted in the Apps Script editor:
+  `Menu.gs`, `ThursdayInvite.gs`, `MondayInvite.gs`, `Pairings.gs`,
+  `SyncForms.gs`, `SyncContacts.gs`, `ThursdayForm.html`, `MondayForm.html`.
+  The `appsscript.json` OAuth scopes were trimmed to just `spreadsheets` and
+  `script.external_request` (the v1-only `gmail.compose`, `forms`, `contacts`,
+  and `script.container.ui` scopes are gone), which triggers a one-time
+  re-authorization on the next run/deploy.

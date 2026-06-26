@@ -403,18 +403,6 @@ function getConfirmedPlayers(eventId) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
-function debugFormResponses() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var formSheet = ss.getSheetByName('Form Responses');
-  var formData = formSheet.getDataRange().getValues();
-  
-  for (var i = 1; i < formData.length; i++) {
-    var name = formData[i][1].toString().trim();
-    var rowEventId = formData[i][6] ? formData[i][6].toString().trim() : 'BLANK';
-    Logger.log('Row ' + i + ': ' + name + ' | EventID: [' + rowEventId + '] | Length: ' + rowEventId.length);
-  }
-}
-
 function savePairings(params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1160,6 +1148,9 @@ function buildInviteEmailHtml_(o) {
   var notesSection = o.notes
     ? '<p style="color:#5d6d7e;font-size:15px;line-height:1.5;margin:0 0 12px;">' + o.notes + '</p>'
     : '';
+  var courseNotesSection = o.courseNotes
+    ? '<p style="color:#5d6d7e;font-size:14px;line-height:1.5;margin:0 0 12px;">' + o.courseNotes + '</p>'
+    : '';
   return '<meta charset="utf-8">' +
     '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
     '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
@@ -1177,6 +1168,7 @@ function buildInviteEmailHtml_(o) {
     '</div>' +
     notesSection +
     feeSection +
+    courseNotesSection +
     commentSection +
     '<div style="text-align:center;margin:24px 0;">' +
     '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#1a5276;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#9989; I\'M IN</a>' +
@@ -1247,7 +1239,7 @@ function previewInvite(params) {
       : eventRow[0].toString();
 
     var coursesData = coursesSheet.getDataRange().getValues();
-    var greenFee = '', cartFee = '', total = '', venueUrl = '';
+    var greenFee = '', cartFee = '', total = '', venueUrl = '', courseNotes = '';
     for (var c = 1; c < coursesData.length; c++) {
       if (coursesData[c][0].toString() === venueName) {
         var green = parseFloat(coursesData[c][7]) || 0;
@@ -1256,6 +1248,7 @@ function previewInvite(params) {
         cartFee = cart > 0 ? '$' + cart.toFixed(2) : '';
         total = (green + cart) > 0 ? '$' + (green + cart).toFixed(2) : '';
         venueUrl = coursesData[c][6] ? coursesData[c][6].toString() : '';
+        courseNotes = coursesData[c][11] ? coursesData[c][11].toString() : '';  // col L Course Notes
         break;
       }
     }
@@ -1296,6 +1289,7 @@ function previewInvite(params) {
       comment: comment,
       isReminder: remindOnly,
       notes: eventRow[6] ? eventRow[6].toString() : '',
+      courseNotes: courseNotes,
       rsvpUrl: baseUrl + '/rsvp.html?event=' + eventId + '&player=' + sampleSlug,
       signupUrl: baseUrl + '/signup.html?event=' + eventId
     });
@@ -1363,6 +1357,7 @@ function sendInviteEmails(params) {
     var cartFee = '';
     var total = '';
     var venueUrl = '';
+    var courseNotes = '';
     for (var c = 1; c < coursesData.length; c++) {
       if (coursesData[c][0].toString() === venueName) {
         var green = parseFloat(coursesData[c][7]) || 0;
@@ -1371,6 +1366,7 @@ function sendInviteEmails(params) {
         cartFee = cart > 0 ? '$' + cart.toFixed(2) : '';
         total = (green + cart) > 0 ? '$' + (green + cart).toFixed(2) : '';
         venueUrl = coursesData[c][6] ? coursesData[c][6].toString() : '';
+        courseNotes = coursesData[c][11] ? coursesData[c][11].toString() : '';  // col L Course Notes
         break;
       }
     }
@@ -1437,6 +1433,7 @@ function sendInviteEmails(params) {
         timeStr: timeStr, slotsReserved: slotsReserved,
         greenFee: greenFee, cartFee: cartFee, total: total,
         comment: comment, isReminder: remindOnly, notes: eventRow[6] ? eventRow[6].toString() : '',
+        courseNotes: courseNotes,
         rsvpUrl: rsvpUrl, signupUrl: signupUrl
       });
 
@@ -1531,15 +1528,4 @@ function submitRSVP(params) {
     return ContentService.createTextOutput(JSON.stringify({error: e.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
-}
-function testTextStorage() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('Form Responses');
-  var lastRow = sheet.getLastRow() + 1;
-  
-  // Method 1 - apostrophe prefix
-  sheet.getRange(lastRow, 6).setValue("'" + '2026-06-19');
-  
-  Logger.log('Cell type: ' + typeof sheet.getRange(lastRow, 6).getValue());
-  Logger.log('Cell value: ' + sheet.getRange(lastRow, 6).getValue());
 }
