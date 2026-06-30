@@ -59,6 +59,13 @@ function doPost(e) {
   if (action === 'submitRSVP') {
     return submitRSVP(data);
   }
+  if (action === 'uploadImage') {
+    if (!passcodeOk_(data)) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return uploadImage(data);
+  }
 
   return ContentService.createTextOutput(JSON.stringify({error: 'Unknown action'}))
     .setMimeType(ContentService.MimeType.JSON);
@@ -819,8 +826,11 @@ function testBrevoSend() {
 // ── Broadcast: general email to all active players (not tied to an event) ──
 
 // Wrap the organizer's free-text body in a simple branded email shell.
-function buildBroadcastEmailHtml_(bodyText) {
+function buildBroadcastEmailHtml_(bodyText, imageUrl) {
   var safe = (bodyText || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+  var imageSection = imageUrl
+    ? '<div style="margin-top:16px;text-align:center;"><img src="' + imageUrl + '" alt="" style="max-width:100%;height:auto;border-radius:8px;"></div>'
+    : '';
   return '<meta charset="utf-8">' +
     '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
     '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
@@ -828,7 +838,7 @@ function buildBroadcastEmailHtml_(bodyText) {
     '<h1 style="margin:8px 0;font-size:22px;">RonsTeeBallers</h1>' +
     '</div>' +
     '<div style="background:white;padding:24px;border:1px solid #e0e8f0;border-top:none;font-size:16px;color:#1a2332;line-height:1.6;">' +
-    safe +
+    safe + imageSection +
     '</div>' +
     '<div style="background:#f0f4f8;padding:12px;border-radius:0 0 12px 12px;text-align:center;">' +
     '<p style="color:#aab7c4;font-size:12px;margin:0;">RonsTeeBallers Golf Group</p>' +
@@ -911,7 +921,7 @@ function broadcastEmail(params) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    var htmlBody = buildBroadcastEmailHtml_(body);
+    var htmlBody = buildBroadcastEmailHtml_(body, (params.imageUrl || '').toString());
     var sent = 0;
     var errors = [];
     recipients.forEach(function(r) {
@@ -924,6 +934,57 @@ function broadcastEmail(params) {
     })).setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
     return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// Commit a pasted image to the GitHub Pages repo (images/ folder) so it can be
+// embedded in broadcast emails by URL. Expects { filename, content } where content
+// is base64 (no "data:" prefix). Requires Script Property GITHUB_TOKEN — a
+// fine-grained PAT with Contents: read/write on RonsTeeBallers/ronsteeballers.github.io.
+function uploadImage(data) {
+  try {
+    var token = PropertiesService.getScriptProperties().getProperty('GITHUB_TOKEN');
+    if (!token) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'GITHUB_TOKEN script property not set'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var filename = (data.filename || '').toString().replace(/[^a-zA-Z0-9._-]/g, '');
+    var content = (data.content || '').toString();
+    if (!filename || !content) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Missing filename or content'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var path = 'images/' + filename;
+    var apiUrl = 'https://api.github.com/repos/RonsTeeBallers/ronsteeballers.github.io/contents/' + path;
+    var resp = UrlFetchApp.fetch(apiUrl, {
+      method: 'put',
+      contentType: 'application/json',
+      headers: {
+        'Authorization': 'Bearer ' + token,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'RonsTeeBallers-AppsScript'
+      },
+      payload: JSON.stringify({
+        message: 'Add broadcast image ' + filename,
+        content: content,
+        branch: 'main'
+      }),
+      muteHttpExceptions: true
+    });
+    var code = resp.getResponseCode();
+    if (code === 200 || code === 201) {
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        url: 'https://ronsteeballers.github.io/' + path
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      error: 'GitHub upload failed: HTTP ' + code + ' ' + resp.getContentText()
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch(err) {
+    return ContentService.createTextOutput(JSON.stringify({error: err.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
