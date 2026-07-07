@@ -4,7 +4,7 @@ function doGet(e) {
   var callback = params.callback || '';
   var result;
 
-  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true };
+  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true };
   if (GUARDED[action] && !passcodeOk_(params)) {
     result = ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized: invalid organizer passcode'}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -18,6 +18,10 @@ function doGet(e) {
     result = getPlayers();
   } else if (action === 'organizerSubmitRSVP') {
     result = organizerSubmitRSVP(params);
+  } else if (action === 'getPlayerDetail') {
+    result = getPlayerDetail(params);
+  } else if (action === 'savePlayer') {
+    result = savePlayer(params);
   } else if (action === 'getVenues') {
     result = getVenues();
   } else if (action === 'createEvent') {
@@ -1749,4 +1753,99 @@ function organizerSubmitRSVP(params) {
       .setMimeType(ContentService.MimeType.JSON);
   }
   return writeRsvpRow_(player.lastFirst, params);
+}
+
+// Same slug algorithm as resolvePlayerBySlug_/getPlayers, factored out for the
+// player add/edit tool (needs it for both lookup and duplicate-name detection).
+function slugify_(lastFirst) {
+  return (lastFirst || '').toString().toLowerCase()
+    .replace(/,\s*/g, '-').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+}
+
+// Full detail for one player (used to populate the edit form). Guarded — returns
+// email/phone, which getPlayers deliberately omits.
+function getPlayerDetail(params) {
+  try {
+    var slug = (params.slug || '').toString().trim().toLowerCase();
+    var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
+    for (var i = 1; i < playersData.length; i++) {
+      var lastFirst = playersData[i][0].toString().trim();
+      if (slugify_(lastFirst) !== slug) continue;
+      return ContentService.createTextOutput(JSON.stringify({
+        player: {
+          slug: slug,
+          first: playersData[i][1] ? playersData[i][1].toString().trim() : '',
+          last: playersData[i][2] ? playersData[i][2].toString().trim() : '',
+          email: playersData[i][3] ? playersData[i][3].toString().trim() : '',
+          active: (playersData[i][4] ? playersData[i][4].toString().trim() : '') === 'Yes',
+          indianLakes: (playersData[i][5] ? playersData[i][5].toString().trim() : '') === 'Yes',
+          xGolf: (playersData[i][6] ? playersData[i][6].toString().trim() : '') === 'Yes',
+          phone: playersData[i][7] ? playersData[i][7].toString().trim() : ''
+        }
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify({error: 'Player not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// Add a new player, or edit an existing one (originalSlug identifies which row to
+// overwrite; empty originalSlug means "add new"). Column H (Phone) is new here —
+// columns A-G are unchanged, see players-tab-schema.
+function savePlayer(params) {
+  try {
+    var first = (params.first || '').toString().trim();
+    var last = (params.last || '').toString().trim();
+    if (!first || !last) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'First and last name are required'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var email = (params.email || '').toString().trim();
+    var phone = (params.phone || '').toString().trim();
+    var active = (params.active === 'Yes') ? 'Yes' : 'No';
+    var indianLakes = (params.indianLakes === 'Yes') ? 'Yes' : 'No';
+    var xGolf = (params.xGolf === 'Yes') ? 'Yes' : 'No';
+    var lastFirst = last + ', ' + first;
+    var newSlug = slugify_(lastFirst);
+    var originalSlug = (params.originalSlug || '').toString().trim().toLowerCase();
+
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players');
+    var playersData = sheet.getDataRange().getValues();
+
+    // Block collisions with a DIFFERENT existing player landing on the same slug
+    // (slug identifies players across RSVP links and this tool - must stay unique).
+    for (var i = 1; i < playersData.length; i++) {
+      var rowSlug = slugify_(playersData[i][0].toString().trim());
+      if (rowSlug === newSlug && rowSlug !== originalSlug) {
+        return ContentService.createTextOutput(JSON.stringify({
+          error: 'A player named "' + lastFirst + '" already exists.'
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    var rowValues = [lastFirst, first, last, email, active, indianLakes, xGolf, phone];
+
+    if (originalSlug) {
+      var rowIndex = -1;
+      for (var j = 1; j < playersData.length; j++) {
+        if (slugify_(playersData[j][0].toString().trim()) === originalSlug) { rowIndex = j + 1; break; }
+      }
+      if (rowIndex === -1) {
+        return ContentService.createTextOutput(JSON.stringify({error: 'Player not found (may have been edited elsewhere) - reopen and try again.'}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      sheet.getRange(rowIndex, 1, 1, rowValues.length).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({success: true, slug: newSlug}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
 }

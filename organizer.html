@@ -318,6 +318,11 @@
       <span>Respond as a player</span>
       <span class="arrow">›</span>
     </button>
+    <button class="tool-btn" onclick="showManagePlayers()">
+      <span class="icon">👥</span>
+      <span>Add / edit a player</span>
+      <span class="arrow">›</span>
+    </button>
   </div>
 
   <div class="bottom-spacer"></div>
@@ -473,6 +478,72 @@
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideImpersonate()">Cancel</button>
       <button class="btn btn-primary" id="btn-imp-submit" onclick="submitImpersonate()">Submit Response</button>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Player Modal -->
+<div class="modal-overlay" id="manage-players-modal">
+  <div class="modal">
+    <h2 id="mp-title">Manage Players</h2>
+
+    <div id="mp-search-section">
+      <div class="form-group">
+        <label class="form-label">Find a player to edit</label>
+        <input class="form-input" id="mp-player-search" type="text" placeholder="Type a name…" oninput="filterMpPlayers()">
+        <div class="imp-player-list" id="mp-player-list"></div>
+      </div>
+      <button type="button" class="btn-full" style="margin:8px 0 0;" onclick="startAddPlayer()">+ Add New Player</button>
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="hideManagePlayers()">Cancel</button>
+      </div>
+    </div>
+
+    <div id="mp-form-section" class="hidden">
+      <div class="form-group">
+        <label class="form-label">First Name</label>
+        <input class="form-input" id="mp-first" type="text">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Last Name</label>
+        <input class="form-input" id="mp-last" type="text">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Email</label>
+        <input class="form-input" id="mp-email" type="email" placeholder="name@example.com">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Phone</label>
+        <input class="form-input" id="mp-phone" type="tel" placeholder="(208) 555-0100">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Active</label>
+        <div class="choice-row">
+          <button type="button" class="btn-choice" id="mp-btn-active-yes" onclick="selectMpFlag('active','Yes')">Yes</button>
+          <button type="button" class="btn-choice" id="mp-btn-active-no" onclick="selectMpFlag('active','No')">No</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Indian Lakes</label>
+        <div class="choice-row">
+          <button type="button" class="btn-choice" id="mp-btn-il-yes" onclick="selectMpFlag('indianLakes','Yes')">Yes</button>
+          <button type="button" class="btn-choice" id="mp-btn-il-no" onclick="selectMpFlag('indianLakes','No')">No</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">X-Golf</label>
+        <div class="choice-row">
+          <button type="button" class="btn-choice" id="mp-btn-xg-yes" onclick="selectMpFlag('xGolf','Yes')">Yes</button>
+          <button type="button" class="btn-choice" id="mp-btn-xg-no" onclick="selectMpFlag('xGolf','No')">No</button>
+        </div>
+      </div>
+
+      <div id="mp-error" style="display:none;background:#fdf2f2;border:1px solid #e74c3c;color:#922b21;padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;"></div>
+
+      <div class="modal-actions">
+        <button class="btn btn-secondary" onclick="backToMpSearch()">Back</button>
+        <button class="btn btn-primary" id="btn-mp-save" onclick="saveMpPlayer()">Save Player</button>
+      </div>
     </div>
   </div>
 </div>
@@ -1078,9 +1149,9 @@ function viewPlayers(eventId) {
     document.getElementById('imp-guest-last').value = '';
     document.getElementById('imp-comments').value = '';
     document.getElementById('imp-yes-fields').classList.add('hidden');
-    setImpChoiceUI('imp-btn-yes,imp-btn-no', '');
-    setImpChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', '');
-    setImpChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', '');
+    setChoiceUI('imp-btn-yes,imp-btn-no', '');
+    setChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', '');
+    setChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', '');
     document.getElementById('imp-error').style.display = 'none';
     var btn = document.getElementById('btn-imp-submit');
     btn.disabled = false;
@@ -1142,7 +1213,7 @@ function viewPlayers(eventId) {
     document.getElementById('imp-player-selected').classList.add('hidden');
   }
 
-  function setImpChoiceUI(ids, selectedId) {
+  function setChoiceUI(ids, selectedId) {
     ids.split(',').forEach(function(id) {
       var el = document.getElementById(id);
       if (el) el.className = 'btn-choice' + (id === selectedId ? ' selected' : '');
@@ -1151,15 +1222,15 @@ function viewPlayers(eventId) {
 
   function selectImpPlaying(choice) {
     impPlaying = choice;
-    setImpChoiceUI('imp-btn-yes,imp-btn-no', choice === 'Yes' ? 'imp-btn-yes' : 'imp-btn-no');
+    setChoiceUI('imp-btn-yes,imp-btn-no', choice === 'Yes' ? 'imp-btn-yes' : 'imp-btn-no');
     if (choice === 'Yes') {
       document.getElementById('imp-yes-fields').classList.remove('hidden');
     } else {
       document.getElementById('imp-yes-fields').classList.add('hidden');
       impWalkRide = '';
       impScoring = '';
-      setImpChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', '');
-      setImpChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', '');
+      setChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', '');
+      setChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', '');
       document.getElementById('imp-guest-first').value = '';
       document.getElementById('imp-guest-last').value = '';
     }
@@ -1168,13 +1239,13 @@ function viewPlayers(eventId) {
   function selectImpWalkRide(choice) {
     impWalkRide = choice;
     var idMap = { 'Walk': 'imp-btn-walk', 'Ride': 'imp-btn-ride', 'No preference': 'imp-btn-wr-nopref' };
-    setImpChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', idMap[choice]);
+    setChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', idMap[choice]);
   }
 
   function selectImpScoring(choice) {
     impScoring = choice;
     var idMap = { 'Own Ball': 'imp-btn-ownball', 'Scramble': 'imp-btn-scramble', 'No Preference': 'imp-btn-score-nopref' };
-    setImpChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', idMap[choice]);
+    setChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', idMap[choice]);
   }
 
   function showImpError(msg) {
@@ -1219,6 +1290,142 @@ function viewPlayers(eventId) {
         showToast('Recorded response for ' + impSelectedPlayer.name + '.');
       } else {
         showImpError((data && data.error) || 'Unknown error');
+      }
+    });
+  }
+
+  // ── Add / Edit a Player ────────────────────────────────────────────
+  var mpPlayersCache = null;
+  var mpEditingSlug = '';   // '' = adding a new player, else the player being edited
+  var mpFlags = { active: '', indianLakes: '', xGolf: '' };
+  var mpIdMap = {
+    active: { Yes: 'mp-btn-active-yes', No: 'mp-btn-active-no' },
+    indianLakes: { Yes: 'mp-btn-il-yes', No: 'mp-btn-il-no' },
+    xGolf: { Yes: 'mp-btn-xg-yes', No: 'mp-btn-xg-no' }
+  };
+
+  function showManagePlayers() {
+    mpEditingSlug = '';
+    document.getElementById('mp-title').textContent = 'Manage Players';
+    document.getElementById('mp-player-search').value = '';
+    document.getElementById('mp-player-list').innerHTML = '';
+    document.getElementById('mp-search-section').classList.remove('hidden');
+    document.getElementById('mp-form-section').classList.add('hidden');
+    document.getElementById('mp-error').style.display = 'none';
+
+    mpPlayersCache = null;
+    jsonpCall('getPlayers', {}, function(data) { mpPlayersCache = data.players || []; });
+
+    document.getElementById('manage-players-modal').classList.add('show');
+  }
+
+  function hideManagePlayers() {
+    document.getElementById('manage-players-modal').classList.remove('show');
+  }
+
+  function filterMpPlayers() {
+    var list = document.getElementById('mp-player-list');
+    var q = document.getElementById('mp-player-search').value.trim().toLowerCase();
+    if (!q || !mpPlayersCache) { list.innerHTML = ''; return; }
+    var matches = mpPlayersCache.filter(function(p) {
+      return p.name.toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 10);
+    if (matches.length === 0) {
+      list.innerHTML = '<div style="padding:12px 14px;color:#5d6d7e;font-size:14px;">No matching players.</div>';
+      return;
+    }
+    list.innerHTML = matches.map(function(p) {
+      return '<button type="button" class="imp-player-row" onclick="selectMpPlayerForEdit(\'' + p.slug + '\')">' +
+        p.name + (p.active ? '' : '<span class="inactive-tag">Inactive</span>') + '</button>';
+    }).join('');
+  }
+
+  function selectMpPlayerForEdit(slug) {
+    document.getElementById('mp-error').style.display = 'none';
+    jsonpCall('getPlayerDetail', { slug: slug }, function(data) {
+      if (!data || !data.player) {
+        showMpError((data && data.error) || 'Could not load that player.');
+        return;
+      }
+      var p = data.player;
+      mpEditingSlug = slug;
+      document.getElementById('mp-title').textContent = 'Edit Player';
+      document.getElementById('mp-first').value = p.first;
+      document.getElementById('mp-last').value = p.last;
+      document.getElementById('mp-email').value = p.email;
+      document.getElementById('mp-phone').value = p.phone;
+      selectMpFlag('active', p.active ? 'Yes' : 'No');
+      selectMpFlag('indianLakes', p.indianLakes ? 'Yes' : 'No');
+      selectMpFlag('xGolf', p.xGolf ? 'Yes' : 'No');
+      document.getElementById('mp-search-section').classList.add('hidden');
+      document.getElementById('mp-form-section').classList.remove('hidden');
+    });
+  }
+
+  function startAddPlayer() {
+    mpEditingSlug = '';
+    document.getElementById('mp-title').textContent = 'Add New Player';
+    document.getElementById('mp-first').value = '';
+    document.getElementById('mp-last').value = '';
+    document.getElementById('mp-email').value = '';
+    document.getElementById('mp-phone').value = '';
+    selectMpFlag('active', 'Yes');
+    selectMpFlag('indianLakes', 'No');
+    selectMpFlag('xGolf', 'No');
+    document.getElementById('mp-error').style.display = 'none';
+    document.getElementById('mp-search-section').classList.add('hidden');
+    document.getElementById('mp-form-section').classList.remove('hidden');
+  }
+
+  function backToMpSearch() {
+    document.getElementById('mp-form-section').classList.add('hidden');
+    document.getElementById('mp-search-section').classList.remove('hidden');
+    document.getElementById('mp-title').textContent = 'Manage Players';
+  }
+
+  function selectMpFlag(flag, value) {
+    mpFlags[flag] = value;
+    var ids = mpIdMap[flag].Yes + ',' + mpIdMap[flag].No;
+    setChoiceUI(ids, mpIdMap[flag][value]);
+  }
+
+  function showMpError(msg) {
+    var el = document.getElementById('mp-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function saveMpPlayer() {
+    document.getElementById('mp-error').style.display = 'none';
+    var first = document.getElementById('mp-first').value.trim();
+    var last = document.getElementById('mp-last').value.trim();
+    var email = document.getElementById('mp-email').value.trim();
+    var phone = document.getElementById('mp-phone').value.trim();
+
+    if (!first || !last) { showMpError('Please enter a first and last name.'); return; }
+    if (email && email.indexOf('@') === -1) { showMpError('That email address doesn\'t look right.'); return; }
+
+    var btn = document.getElementById('btn-mp-save');
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    jsonpCall('savePlayer', {
+      originalSlug: mpEditingSlug,
+      first: first,
+      last: last,
+      email: email,
+      phone: phone,
+      active: mpFlags.active,
+      indianLakes: mpFlags.indianLakes,
+      xGolf: mpFlags.xGolf
+    }, function(data) {
+      btn.disabled = false;
+      btn.textContent = 'Save Player';
+      if (data && data.success) {
+        hideManagePlayers();
+        showToast((mpEditingSlug ? 'Updated ' : 'Added ') + first + ' ' + last + '.');
+      } else {
+        showMpError((data && data.error) || 'Unknown error');
       }
     });
   }
