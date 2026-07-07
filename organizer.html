@@ -6,6 +6,7 @@
   <title>Organizer Dashboard — RonsTeeBallers</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    .hidden { display: none !important; }
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -119,6 +120,50 @@
       color: white;
     }
     .btn-full:active { background: #154360; }
+
+    .choice-row { display: flex; gap: 8px; margin-bottom: 4px; }
+    .btn-choice {
+      flex: 1;
+      padding: 12px 8px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+      border: 2px solid #d0d8e4;
+      background: white;
+      color: #1a2332;
+    }
+    .btn-choice.selected { background: #1a5276; color: white; border-color: #1a5276; }
+
+    .imp-player-list { border: 2px solid #d0d8e4; border-radius: 10px; margin-top: 4px; overflow: hidden; max-height: 220px; overflow-y: auto; }
+    .imp-player-row {
+      display: block;
+      width: 100%;
+      text-align: left;
+      padding: 12px 14px;
+      border: none;
+      border-bottom: 1px solid #f0f4f8;
+      background: white;
+      font-size: 15px;
+      color: #1a2332;
+      cursor: pointer;
+    }
+    .imp-player-row:last-child { border-bottom: none; }
+    .imp-player-row:active { background: #eaf2ff; }
+    .imp-player-row .inactive-tag { color: #aab7c4; font-size: 12px; font-weight: 600; margin-left: 6px; }
+    .imp-selected-player {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #eaf2ff;
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a5276;
+    }
+    .imp-selected-player button { background: none; border: none; color: #1a5276; font-weight: 700; font-size: 13px; cursor: pointer; text-decoration: underline; }
 
     .tools-card {
       background: white;
@@ -268,6 +313,11 @@
       <span>Send email to active players</span>
       <span class="arrow">›</span>
     </button>
+    <button class="tool-btn" onclick="showImpersonate()">
+      <span class="icon">🎭</span>
+      <span>Respond as a player</span>
+      <span class="arrow">›</span>
+    </button>
   </div>
 
   <div class="bottom-spacer"></div>
@@ -354,7 +404,79 @@
     </div>
   </div>
 </div>
-  
+
+<!-- Respond as a Player (Impersonate RSVP) Modal -->
+<div class="modal-overlay" id="impersonate-modal">
+  <div class="modal">
+    <h2>Respond as a Player</h2>
+
+    <div class="form-group">
+      <label class="form-label">Player</label>
+      <div id="imp-player-picker">
+        <input class="form-input" id="imp-player-search" type="text" placeholder="Type a name…" oninput="filterImpPlayers()">
+        <div class="imp-player-list" id="imp-player-list"></div>
+      </div>
+      <div class="imp-selected-player hidden" id="imp-player-selected">
+        <span id="imp-player-selected-name"></span>
+        <button type="button" onclick="clearImpPlayer()">Change</button>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Event</label>
+      <select class="form-input" id="imp-event">
+        <option value="">Select event...</option>
+      </select>
+    </div>
+
+    <div class="form-group" id="imp-playing-group">
+      <label class="form-label">Playing?</label>
+      <div class="choice-row">
+        <button type="button" class="btn-choice" id="imp-btn-yes" onclick="selectImpPlaying('Yes')">Yes, I'm in</button>
+        <button type="button" class="btn-choice" id="imp-btn-no" onclick="selectImpPlaying('No')">No, I'm out</button>
+      </div>
+    </div>
+
+    <div id="imp-yes-fields" class="hidden">
+      <div class="form-group">
+        <label class="form-label">Walk or Ride?</label>
+        <div class="choice-row">
+          <button type="button" class="btn-choice" id="imp-btn-walk" onclick="selectImpWalkRide('Walk')">Walk</button>
+          <button type="button" class="btn-choice" id="imp-btn-ride" onclick="selectImpWalkRide('Ride')">Ride</button>
+          <button type="button" class="btn-choice" id="imp-btn-wr-nopref" onclick="selectImpWalkRide('No preference')">No pref.</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Scoring</label>
+        <div class="choice-row">
+          <button type="button" class="btn-choice" id="imp-btn-ownball" onclick="selectImpScoring('Own Ball')">Own Ball</button>
+          <button type="button" class="btn-choice" id="imp-btn-scramble" onclick="selectImpScoring('Scramble')">Scramble</button>
+          <button type="button" class="btn-choice" id="imp-btn-score-nopref" onclick="selectImpScoring('No Preference')">No pref.</button>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Guest (optional)</label>
+        <div style="display:flex;gap:8px;">
+          <input class="form-input" id="imp-guest-first" type="text" placeholder="First name">
+          <input class="form-input" id="imp-guest-last" type="text" placeholder="Last name">
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Comments (optional)</label>
+      <textarea class="form-input" id="imp-comments" rows="2" style="resize:vertical;"></textarea>
+    </div>
+
+    <div id="imp-error" style="display:none;background:#fdf2f2;border:1px solid #e74c3c;color:#922b21;padding:10px 14px;border-radius:8px;font-size:14px;margin-top:8px;"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideImpersonate()">Cancel</button>
+      <button class="btn btn-primary" id="btn-imp-submit" onclick="submitImpersonate()">Submit Response</button>
+    </div>
+  </div>
+</div>
+
 <!-- Create Event Modal -->
 <div class="modal-overlay" id="create-modal">
   <div class="modal">
@@ -935,6 +1057,171 @@ function viewPlayers(eventId) {
     }
   }
 
+
+  // ── Respond as a Player (organizer impersonates a player's RSVP) ──
+  var impPlayersCache = null;
+  var impSelectedPlayer = null;   // { name, slug }
+  var impPlaying = '';
+  var impWalkRide = '';
+  var impScoring = '';
+
+  function showImpersonate() {
+    impSelectedPlayer = null;
+    impPlaying = '';
+    impWalkRide = '';
+    impScoring = '';
+    document.getElementById('imp-player-search').value = '';
+    document.getElementById('imp-player-list').innerHTML = '';
+    document.getElementById('imp-player-picker').classList.remove('hidden');
+    document.getElementById('imp-player-selected').classList.add('hidden');
+    document.getElementById('imp-guest-first').value = '';
+    document.getElementById('imp-guest-last').value = '';
+    document.getElementById('imp-comments').value = '';
+    document.getElementById('imp-yes-fields').classList.add('hidden');
+    setImpChoiceUI('imp-btn-yes,imp-btn-no', '');
+    setImpChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', '');
+    setImpChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', '');
+    document.getElementById('imp-error').style.display = 'none';
+    var btn = document.getElementById('btn-imp-submit');
+    btn.disabled = false;
+    btn.textContent = 'Submit Response';
+
+    var select = document.getElementById('imp-event');
+    select.innerHTML = '<option value="">Loading events…</option>';
+    jsonpCall('getOpenEvents', {}, function(data) {
+      select.innerHTML = '<option value="">Select event...</option>';
+      (data.events || []).forEach(function(event) {
+        var opt = document.createElement('option');
+        opt.value = event.id;
+        opt.textContent = event.venue + ' — ' + formatDate(event.date);
+        select.appendChild(opt);
+      });
+    });
+
+    impPlayersCache = null;
+    jsonpCall('getPlayers', {}, function(data) {
+      impPlayersCache = data.players || [];
+    });
+
+    document.getElementById('impersonate-modal').classList.add('show');
+  }
+
+  function hideImpersonate() {
+    document.getElementById('impersonate-modal').classList.remove('show');
+  }
+
+  function filterImpPlayers() {
+    var list = document.getElementById('imp-player-list');
+    var q = document.getElementById('imp-player-search').value.trim().toLowerCase();
+    if (!q || !impPlayersCache) { list.innerHTML = ''; return; }
+    var matches = impPlayersCache.filter(function(p) {
+      return p.name.toLowerCase().indexOf(q) !== -1;
+    }).slice(0, 10);
+    if (matches.length === 0) {
+      list.innerHTML = '<div style="padding:12px 14px;color:#5d6d7e;font-size:14px;">No matching players.</div>';
+      return;
+    }
+    list.innerHTML = matches.map(function(p) {
+      return '<button type="button" class="imp-player-row" onclick="selectImpPlayer(\'' + p.slug + '\',\'' + p.name.replace(/'/g, "\\'") + '\')">' +
+        p.name + (p.active ? '' : '<span class="inactive-tag">Inactive</span>') + '</button>';
+    }).join('');
+  }
+
+  function selectImpPlayer(slug, name) {
+    impSelectedPlayer = { slug: slug, name: name };
+    document.getElementById('imp-player-picker').classList.add('hidden');
+    document.getElementById('imp-player-selected').classList.remove('hidden');
+    document.getElementById('imp-player-selected-name').textContent = name;
+  }
+
+  function clearImpPlayer() {
+    impSelectedPlayer = null;
+    document.getElementById('imp-player-search').value = '';
+    document.getElementById('imp-player-list').innerHTML = '';
+    document.getElementById('imp-player-picker').classList.remove('hidden');
+    document.getElementById('imp-player-selected').classList.add('hidden');
+  }
+
+  function setImpChoiceUI(ids, selectedId) {
+    ids.split(',').forEach(function(id) {
+      var el = document.getElementById(id);
+      if (el) el.className = 'btn-choice' + (id === selectedId ? ' selected' : '');
+    });
+  }
+
+  function selectImpPlaying(choice) {
+    impPlaying = choice;
+    setImpChoiceUI('imp-btn-yes,imp-btn-no', choice === 'Yes' ? 'imp-btn-yes' : 'imp-btn-no');
+    if (choice === 'Yes') {
+      document.getElementById('imp-yes-fields').classList.remove('hidden');
+    } else {
+      document.getElementById('imp-yes-fields').classList.add('hidden');
+      impWalkRide = '';
+      impScoring = '';
+      setImpChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', '');
+      setImpChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', '');
+      document.getElementById('imp-guest-first').value = '';
+      document.getElementById('imp-guest-last').value = '';
+    }
+  }
+
+  function selectImpWalkRide(choice) {
+    impWalkRide = choice;
+    var idMap = { 'Walk': 'imp-btn-walk', 'Ride': 'imp-btn-ride', 'No preference': 'imp-btn-wr-nopref' };
+    setImpChoiceUI('imp-btn-walk,imp-btn-ride,imp-btn-wr-nopref', idMap[choice]);
+  }
+
+  function selectImpScoring(choice) {
+    impScoring = choice;
+    var idMap = { 'Own Ball': 'imp-btn-ownball', 'Scramble': 'imp-btn-scramble', 'No Preference': 'imp-btn-score-nopref' };
+    setImpChoiceUI('imp-btn-ownball,imp-btn-scramble,imp-btn-score-nopref', idMap[choice]);
+  }
+
+  function showImpError(msg) {
+    var el = document.getElementById('imp-error');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function submitImpersonate() {
+    document.getElementById('imp-error').style.display = 'none';
+
+    var eventId = document.getElementById('imp-event').value;
+    var guestFirst = document.getElementById('imp-guest-first').value.trim();
+    var guestLast = document.getElementById('imp-guest-last').value.trim();
+
+    if (!impSelectedPlayer) { showImpError('Please select a player.'); return; }
+    if (!eventId) { showImpError('Please select an event.'); return; }
+    if (!impPlaying) { showImpError('Please select Yes or No.'); return; }
+    if (impPlaying === 'Yes' && (guestFirst || guestLast) && (!guestFirst || !guestLast)) {
+      showImpError('Please enter both the guest\'s first and last name, or remove the guest.');
+      return;
+    }
+
+    var btn = document.getElementById('btn-imp-submit');
+    btn.disabled = true;
+    btn.textContent = 'Submitting...';
+
+    jsonpCall('organizerSubmitRSVP', {
+      playerSlug: impSelectedPlayer.slug,
+      eventId: eventId,
+      playing: impPlaying,
+      walkRide: impWalkRide,
+      scoring: impScoring,
+      guestFirst: guestFirst,
+      guestLast: guestLast,
+      comments: document.getElementById('imp-comments').value || ''
+    }, function(data) {
+      btn.disabled = false;
+      btn.textContent = 'Submit Response';
+      if (data && data.success) {
+        hideImpersonate();
+        showToast('Recorded response for ' + impSelectedPlayer.name + '.');
+      } else {
+        showImpError((data && data.error) || 'Unknown error');
+      }
+    });
+  }
 
   ensureOrganizerAccess(loadEvents);
 </script>

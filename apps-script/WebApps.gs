@@ -4,7 +4,7 @@ function doGet(e) {
   var callback = params.callback || '';
   var result;
 
-  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, broadcastEmail: true };
+  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true };
   if (GUARDED[action] && !passcodeOk_(params)) {
     result = ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized: invalid organizer passcode'}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -14,6 +14,10 @@ function doGet(e) {
     result = getConfirmedPlayers(params.eventId);
   } else if (action === 'getOpenEvents') {
     result = getOpenEvents();
+  } else if (action === 'getPlayers') {
+    result = getPlayers();
+  } else if (action === 'organizerSubmitRSVP') {
+    result = organizerSubmitRSVP(params);
   } else if (action === 'getVenues') {
     result = getVenues();
   } else if (action === 'createEvent') {
@@ -1627,6 +1631,13 @@ function sendInviteEmails(params) {
   }
 }
 function submitRSVP(params) {
+  return writeRsvpRow_((params.playerName || '').toString(), params);
+}
+
+// Shared by submitRSVP (player-submitted, playerName trusted from the RSVP link)
+// and organizerSubmitRSVP (organizer-submitted, playerName resolved server-side
+// from the Players tab). Writes one Form Responses row.
+function writeRsvpRow_(playerName, params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var formSheet = ss.getSheetByName('Form Responses');
@@ -1655,7 +1666,7 @@ function submitRSVP(params) {
     var timestamp = new Date();
     var row = [
       timestamp,
-      params.playerName || '',
+      playerName || '',
       params.playing || '',
       params.walkRide || '',
       params.scoring || '',
@@ -1677,4 +1688,65 @@ function submitRSVP(params) {
     return ContentService.createTextOutput(JSON.stringify({error: e.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// Look up a player in the Players tab by their RSVP-link slug (same slug algorithm
+// as getEventData). Returns { lastFirst, first, last } or null.
+function resolvePlayerBySlug_(slug) {
+  var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
+  var target = (slug || '').toString().toLowerCase();
+  for (var i = 1; i < playersData.length; i++) {
+    var lastFirst = playersData[i][0].toString().trim();
+    var s = lastFirst.toLowerCase().replace(/,\s*/g, '-').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+    if (s === target) {
+      return {
+        lastFirst: lastFirst,
+        first: playersData[i][1].toString().trim(),
+        last: playersData[i][2].toString().trim()
+      };
+    }
+  }
+  return null;
+}
+
+// Full player roster for the organizer's "Respond as a player" tool. Guarded by
+// passcode since it lists every player (active and inactive) for impersonation.
+function getPlayers() {
+  try {
+    var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
+    var players = [];
+    for (var i = 1; i < playersData.length; i++) {
+      var lastFirst = playersData[i][0].toString().trim();
+      if (!lastFirst) continue;
+      var first = playersData[i][1].toString().trim();
+      var last = playersData[i][2].toString().trim();
+      var active = (playersData[i][4] ? playersData[i][4].toString().trim() : '') === 'Yes';
+      var slug = lastFirst.toLowerCase().replace(/,\s*/g, '-').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+      players.push({ name: (first + ' ' + last).trim(), slug: slug, active: active });
+    }
+    players.sort(function(a, b) { return a.name.localeCompare(b.name); });
+    return ContentService.createTextOutput(JSON.stringify({players: players}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// Organizer-submitted RSVP on behalf of a player (e.g. they called in their response).
+// Resolves the player server-side from playerSlug so the written name always matches
+// the canonical Players tab entry, then writes the same row shape as submitRSVP.
+function organizerSubmitRSVP(params) {
+  var slug = (params.playerSlug || '').toString().trim();
+  var eventId = (params.eventId || '').toString().trim();
+  if (!slug || !eventId) {
+    return ContentService.createTextOutput(JSON.stringify({error: 'Missing player or event'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  var player = resolvePlayerBySlug_(slug);
+  if (!player) {
+    return ContentService.createTextOutput(JSON.stringify({error: 'Player not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  return writeRsvpRow_(player.lastFirst, params);
 }
