@@ -1254,12 +1254,61 @@ function buildInviteEmailHtml_(o) {
   var commentSection = o.comment
     ? '<p style="background:#eaf2ff;padding:12px;border-radius:8px;border-left:3px solid #1a5276;">' + o.comment + '</p>'
     : '';
-  var notesSection = o.notes
+  // Event Notes are the organizer's free text from the initial invitation - req'd to be
+  // stripped from REMIND emails so the reminder only carries the current message + roster.
+  var notesSection = (o.notes && !o.isReminder)
     ? '<p style="color:#5d6d7e;font-size:15px;line-height:1.5;margin:0 0 12px;">' + o.notes + '</p>'
     : '';
   var courseNotesSection = o.courseNotes
     ? '<p style="color:#5d6d7e;font-size:14px;line-height:1.5;margin:0 0 12px;">' + o.courseNotes + '</p>'
     : '';
+  var signedUpSection = '';
+  if (o.isReminder && o.signedUpNames && o.signedUpNames.length) {
+    signedUpSection = '<div style="margin:0 0 16px;">' +
+      '<p style="font-weight:700;color:#1a2332;margin:0 0 6px;">Players Signed Up</p>' +
+      '<p style="color:#1a2332;margin:0;line-height:1.6;">' +
+      o.signedUpNames.map(escapeHtml_).join('<br>') +
+      '</p></div>';
+  }
+  var detailsBlock = '<div style="background:#f0f4f8;padding:16px;border-radius:8px;margin:16px 0;">' +
+    '<p style="margin:4px 0;font-size:16px;font-weight:700;color:#1a2332;">&#128197; ' + o.formattedDate + '</p>' +
+    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#128205; ' + venueLink + '</p>' +
+    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#9200; ' + o.timeStr + ' (first tee time)</p>' +
+    '<p style="margin:4px 0;font-size:14px;color:#5d6d7e;">' + o.slotsReserved + ' tee times reserved under the name Ron Blanton</p>' +
+    '</div>';
+  var buttonsBlock = '<div style="text-align:center;margin:24px 0;">' +
+    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#1a5276;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#9989; I\'M IN</a>' +
+    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#922b21;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#10060; I\'M OUT</a>' +
+    '</div>';
+  var signupLine = '<p style="text-align:center;color:#5d6d7e;font-size:14px;">See who else is playing: <a href="' + o.signupUrl + '" style="color:#1a5276;">View Signup List</a></p>';
+
+  var bodyContent;
+  if (o.isReminder) {
+    // Organizer's message is the reason for the reminder - sits right under the greeting
+    // (one blank line between), followed by the roster, then the invitation itself so the
+    // recipient never has to hunt for the original email or ask to be added.
+    bodyContent =
+      '<p style="font-size:18px;font-weight:700;color:#1a2332;margin:0 0 16px;">Hi ' + o.firstName + '!</p>' +
+      commentSection +
+      signedUpSection +
+      detailsBlock +
+      feeSection +
+      courseNotesSection +
+      buttonsBlock +
+      signupLine;
+  } else {
+    bodyContent =
+      '<p style="font-size:18px;font-weight:700;color:#1a2332;">Hi ' + o.firstName + '!</p>' +
+      '<p style="color:#5d6d7e;">You\'re invited to join us for golf:</p>' +
+      detailsBlock +
+      notesSection +
+      feeSection +
+      courseNotesSection +
+      commentSection +
+      buttonsBlock +
+      signupLine;
+  }
+
   return '<meta charset="utf-8">' +
     '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
     '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
@@ -1267,23 +1316,7 @@ function buildInviteEmailHtml_(o) {
     '<h1 style="margin:8px 0;font-size:22px;">' + (o.isReminder ? 'Golf Outing Reminder' : 'Golf Outing Invitation') + '</h1>' +
     '</div>' +
     '<div style="background:white;padding:24px;border:1px solid #e0e8f0;border-top:none;">' +
-    '<p style="font-size:18px;font-weight:700;color:#1a2332;">Hi ' + o.firstName + '!</p>' +
-    '<p style="color:#5d6d7e;">' + (o.isReminder ? 'A friendly reminder &mdash; we haven\'t heard back from you yet:' : 'You\'re invited to join us for golf:') + '</p>' +
-    '<div style="background:#f0f4f8;padding:16px;border-radius:8px;margin:16px 0;">' +
-    '<p style="margin:4px 0;font-size:16px;font-weight:700;color:#1a2332;">&#128197; ' + o.formattedDate + '</p>' +
-    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#128205; ' + venueLink + '</p>' +
-    '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#9200; ' + o.timeStr + ' (first tee time)</p>' +
-    '<p style="margin:4px 0;font-size:14px;color:#5d6d7e;">' + o.slotsReserved + ' tee times reserved under the name Ron Blanton</p>' +
-    '</div>' +
-    notesSection +
-    feeSection +
-    courseNotesSection +
-    commentSection +
-    '<div style="text-align:center;margin:24px 0;">' +
-    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#1a5276;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#9989; I\'M IN</a>' +
-    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#922b21;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#10060; I\'M OUT</a>' +
-    '</div>' +
-    '<p style="text-align:center;color:#5d6d7e;font-size:14px;">See who else is playing: <a href="' + o.signupUrl + '" style="color:#1a5276;">View Signup List</a></p>' +
+    bodyContent +
     '</div>' +
     '<div style="background:#f0f4f8;padding:12px;border-radius:0 0 12px 12px;text-align:center;">' +
     '<p style="color:#aab7c4;font-size:12px;margin:0;">See you on the course!</p>' +
@@ -1291,12 +1324,19 @@ function buildInviteEmailHtml_(o) {
     '</div>';
 }
 
-// Returns a set {lowercased "Last, First": true} of players who have ANY RSVP row
-// (Yes or No) for the given event — used to skip them when sending reminders.
-function getRespondedNames_(eventId) {
+// Minimal HTML-escaping for user-entered text (e.g. guest names typed into the public
+// RSVP form) that gets embedded directly into email HTML.
+function escapeHtml_(s) {
+  return (s || '').toString()
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Returns a map {lowercased "Last, First": 'Yes'|'No'} of the latest RSVP response
+// per player for the given event - used to filter REMIND recipients by audience.
+function getResponseStatusMap_(eventId) {
   var formSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form Responses');
   var formData = formSheet.getDataRange().getValues();
-  var responded = {};
+  var status = {};
   for (var i = 1; i < formData.length; i++) {
     var nm = formData[i][1] ? formData[i][1].toString().trim().toLowerCase() : '';
     if (!nm) continue;
@@ -1304,9 +1344,57 @@ function getRespondedNames_(eventId) {
     var rowEventId = '';
     if (raw instanceof Date) rowEventId = Utilities.formatDate(raw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
     else if (raw) rowEventId = raw.toString().trim().replace('EVT-', '');
-    if (rowEventId === eventId) responded[nm] = true;
+    if (rowEventId === eventId) status[nm] = formData[i][2] ? formData[i][2].toString().trim() : '';
   }
-  return responded;
+  return status;
+}
+
+// Builds the exclude-set for a REMIND send from the organizer's chosen audience:
+// 'all' = no exclusions, 'unresponded_or_no' = skip only players who said Yes,
+// 'unresponded' (default) = skip anyone who answered at all (Yes or No).
+function computeRemindExcludeSet_(statusMap, audience) {
+  var exclude = {};
+  if (audience === 'all') return exclude;
+  for (var nm in statusMap) {
+    if (audience === 'unresponded_or_no') {
+      if (statusMap[nm] === 'Yes') exclude[nm] = true;
+    } else {
+      exclude[nm] = true;
+    }
+  }
+  return exclude;
+}
+
+// Returns display names ("First Last") of everyone with a Yes response for eventId,
+// including any guests, sorted alphabetically. Used by the "Players Signed Up" list
+// in REMIND emails.
+function getSignedUpNames_(eventId) {
+  var formSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form Responses');
+  var formData = formSheet.getDataRange().getValues();
+  var responseMap = {};
+  for (var i = 1; i < formData.length; i++) {
+    var lastFirst = formData[i][1] ? formData[i][1].toString().trim() : '';
+    if (!lastFirst) continue;
+    var raw = formData[i][6];  // col G Event ID
+    var rowEventId = '';
+    if (raw instanceof Date) rowEventId = Utilities.formatDate(raw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+    else if (raw) rowEventId = raw.toString().trim().replace('EVT-', '');
+    if (rowEventId !== eventId) continue;
+    responseMap[lastFirst] = {
+      playing: formData[i][2] ? formData[i][2].toString().trim() : '',
+      guest: formData[i][7] ? formData[i][7].toString().trim() : ''
+    };
+  }
+
+  var names = [];
+  for (var lastFirst in responseMap) {
+    if (responseMap[lastFirst].playing !== 'Yes') continue;
+    var parts = lastFirst.split(',');
+    names.push(parts.length > 1 ? parts[1].trim() + ' ' + parts[0].trim() : lastFirst);
+    if (responseMap[lastFirst].guest) names.push(responseMap[lastFirst].guest);
+  }
+  names.sort(function(a, b) { return a.localeCompare(b); });
+  return names;
 }
 
 // Build a one-recipient preview of the invite (no email is sent).
@@ -1321,7 +1409,8 @@ function previewInvite(params) {
     var mailingList = params.mailingList;
     var comment = params.comment || '';
     var remindOnly = (params.remindOnly === 'true' || params.remindOnly === true);
-    var responded = remindOnly ? getRespondedNames_(eventId) : {};
+    var audience = params.audience || 'unresponded';
+    var responded = remindOnly ? computeRemindExcludeSet_(getResponseStatusMap_(eventId), audience) : {};
 
     var eventsData = eventsSheet.getDataRange().getValues();
     var eventRow = null;
@@ -1378,6 +1467,7 @@ function previewInvite(params) {
       isReminder: remindOnly,
       notes: eventRow[6] ? eventRow[6].toString() : '',
       courseNotes: courseNotes,
+      signedUpNames: remindOnly ? getSignedUpNames_(eventId) : [],
       rsvpUrl: baseUrl + '/rsvp.html?event=' + eventId + '&player=' + sampleSlug,
       signupUrl: baseUrl + '/signup.html?event=' + eventId
     });
@@ -1408,7 +1498,8 @@ function sendInviteEmails(params) {
     var mailingList = params.mailingList;
     var comment = params.comment || '';
     var remindOnly = (params.remindOnly === 'true' || params.remindOnly === true);
-    var responded = remindOnly ? getRespondedNames_(eventId) : {};
+    var audience = params.audience || 'unresponded';
+    var responded = remindOnly ? computeRemindExcludeSet_(getResponseStatusMap_(eventId), audience) : {};
 
     // Get event details
     var eventsData = eventsSheet.getDataRange().getValues();
@@ -1478,6 +1569,7 @@ function sendInviteEmails(params) {
     var signupUrl = baseUrl + '/signup.html?event=' + eventId;
     var sent = 0;
     var errors = [];
+    var signedUpNames = remindOnly ? getSignedUpNames_(eventId) : [];
 
     // Send personalized email to each recipient
     recipients.forEach(function(recipient) {
@@ -1490,6 +1582,7 @@ function sendInviteEmails(params) {
         greenFee: greenFee, cartFee: cartFee, total: total,
         comment: comment, isReminder: remindOnly, notes: eventRow[6] ? eventRow[6].toString() : '',
         courseNotes: courseNotes,
+        signedUpNames: signedUpNames,
         rsvpUrl: rsvpUrl, signupUrl: signupUrl
       });
 

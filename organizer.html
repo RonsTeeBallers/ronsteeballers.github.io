@@ -295,11 +295,19 @@
     <h2>Preview &amp; Send Reminder</h2>
     <div id="remind-details" style="background:#eaf2ff;padding:12px;border-radius:8px;margin-bottom:16px;font-size:14px;color:#1a2332;"></div>
     <div class="form-group">
+      <label class="form-label">Remind who?</label>
+      <select class="form-input" id="remind-audience" onchange="loadRemindPreview()">
+        <option value="all">All players</option>
+        <option value="unresponded">All players who haven't responded</option>
+        <option value="unresponded_or_no">All players who haven't responded or responded no</option>
+      </select>
+    </div>
+    <div class="form-group">
       <label class="form-label">Your message (editable — appears at the top of the reminder)</label>
       <textarea class="form-input" id="remind-message" rows="3" style="resize:vertical;" onchange="loadRemindPreview()"></textarea>
     </div>
     <div class="form-group">
-      <label class="form-label">Preview — exactly what non-responders receive</label>
+      <label class="form-label">Preview — exactly what these recipients receive</label>
       <div id="remind-preview-status" style="font-size:13px;color:#5d6d7e;margin-bottom:8px;">Loading preview…</div>
       <iframe id="remind-frame" title="Reminder preview" style="width:100%;height:360px;border:1px solid #d0d8e4;border-radius:8px;background:white;"></iframe>
     </div>
@@ -607,6 +615,12 @@ function viewPlayers(eventId) {
   var currentRemindEventId = '';
   var currentRemindMailingList = '';
 
+  var remindAudienceLabels = {
+    unresponded: "who haven't responded",
+    unresponded_or_no: "who haven't responded or responded no",
+    all: ''
+  };
+
   function showRemindPreview(eventId, venue, mailingList, openSpots) {
     currentRemindEventId = eventId;
     currentRemindMailingList = mailingList;
@@ -614,6 +628,7 @@ function viewPlayers(eventId) {
     document.getElementById('remind-message').value =
       'Quick reminder -- we have ' + openSpots + ' ' + spotWord + ' open for ' + venue +
       '. Tap I\'M IN below to grab a spot. Thanks! -- Ron';
+    document.getElementById('remind-audience').value = 'unresponded';
     document.getElementById('remind-details').textContent = venue + ' — ' + formatDate(eventId);
     document.getElementById('btn-send-remind').disabled = false;
     document.getElementById('btn-send-remind').textContent = 'Send Reminders';
@@ -624,18 +639,21 @@ function viewPlayers(eventId) {
 
   function loadRemindPreview() {
     var status = document.getElementById('remind-preview-status');
+    var audience = document.getElementById('remind-audience').value;
     status.textContent = 'Loading preview…';
     jsonpCall('previewInvite', {
       eventId: currentRemindEventId,
       mailingList: currentRemindMailingList,
       remindOnly: 'true',
+      audience: audience,
       comment: document.getElementById('remind-message').value
     }, function(data) {
       if (data && data.success) {
         document.getElementById('remind-frame').srcdoc = data.html;
+        var audienceLabel = remindAudienceLabels[audience] || '';
         status.textContent = 'Will remind ' + data.count + ' player' +
-          (data.count === 1 ? '' : 's') + " who haven't responded" +
-          (data.count === 0 ? ' — everyone has replied!' : '');
+          (data.count === 1 ? '' : 's') + (audienceLabel ? ' ' + audienceLabel : '') +
+          (data.count === 0 ? ' — nobody matches this audience!' : '');
         var sb = document.getElementById('btn-send-remind');
         sb.textContent = data.count > 0 ? 'Send to ' + data.count : 'Send Reminders';
         sb.disabled = data.count === 0;
@@ -657,6 +675,7 @@ function viewPlayers(eventId) {
       eventId: currentRemindEventId,
       mailingList: currentRemindMailingList,
       remindOnly: 'true',
+      audience: document.getElementById('remind-audience').value,
       comment: document.getElementById('remind-message').value
     }, function(data) {
       btn.disabled = false;
