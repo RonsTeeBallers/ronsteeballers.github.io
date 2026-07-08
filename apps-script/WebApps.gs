@@ -97,10 +97,30 @@ function checkPasscode(params) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Normalize an Events/Form Responses date cell to its canonical yyyy-MM-dd
+// event-ID string (the sheet stores real Dates in some rows, strings in others).
+function eventDateStr_(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  }
+  return value ? value.toString().trim() : '';
+}
+
+// Find the Events row for an event ID (its date). Returns
+// { row: <values array>, rowIndex: <1-based sheet row> } or null.
+function findEventRow_(eventId) {
+  var eventsData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Events').getDataRange().getValues();
+  for (var i = 1; i < eventsData.length; i++) {
+    if (eventDateStr_(eventsData[i][0]) === eventId) {
+      return { row: eventsData[i], rowIndex: i + 1 };
+    }
+  }
+  return null;
+}
+
 function getEventData(eventId, playerSlug) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var eventsSheet = ss.getSheetByName('Events');
     var playersSheet = ss.getSheetByName('Players');
     var venuesSheet = ss.getSheetByName('Courses');
 
@@ -126,37 +146,29 @@ function getEventData(eventId, playerSlug) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Find event by ID (date string)
-    var eventsData = eventsSheet.getDataRange().getValues();
-    var event = null;
-
-    for (var i = 1; i < eventsData.length; i++) {
-      var eventDate = eventsData[i][0];
-      var dateStr = '';
-      if (eventDate instanceof Date) {
-        dateStr = Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      } else {
-        dateStr = eventDate.toString().trim();
-      }
-      if (dateStr === eventId && eventsData[i][5] === 'Open') {
-        event = {
-          date: dateStr,
-          venueName: eventsData[i][1].toString(),
-          time: eventsData[i][2] instanceof Date
-            ? Utilities.formatDate(eventsData[i][2], Session.getScriptTimeZone(), 'h:mm a')
-            : eventsData[i][2].toString(),
-          slotsReserved: eventsData[i][3].toString(),
-          mailingList: eventsData[i][4].toString(),
-          notes: eventsData[i][6] ? eventsData[i][6].toString() : ''
-        };
-        break;
-      }
-    }
-
-    if (!event) {
-      return ContentService.createTextOutput(JSON.stringify({error: 'Event not found or not open'}))
+    // Find event by ID (date string). Distinguish closed from missing so the
+    // RSVP page can show a friendly message once pairings have gone out.
+    var found = findEventRow_(eventId);
+    if (!found) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    if (found.row[5] !== 'Open') {
+      return ContentService.createTextOutput(JSON.stringify({
+        error: 'This outing is closed - pairings have already been sent.',
+        closed: true
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+    var event = {
+      date: eventId,
+      venueName: found.row[1].toString(),
+      time: found.row[2] instanceof Date
+        ? Utilities.formatDate(found.row[2], Session.getScriptTimeZone(), 'h:mm a')
+        : found.row[2].toString(),
+      slotsReserved: found.row[3].toString(),
+      mailingList: found.row[4].toString(),
+      notes: found.row[6] ? found.row[6].toString() : ''
+    };
 
     // Find venue details
     var venuesData = venuesSheet.getDataRange().getValues();
@@ -209,35 +221,25 @@ function getOpenEvents() {
     var eventsSheet = ss.getSheetByName('Events');
     var formSheet = ss.getSheetByName('Form Responses');
     var eventsData = eventsSheet.getDataRange().getValues();
+    var formData = formSheet.getDataRange().getValues();  // read once, not per event
     var events = [];
 
     for (var i = 1; i < eventsData.length; i++) {
       var status = eventsData[i][5] ? eventsData[i][5].toString().trim() : '';
       if (status !== 'Open') continue;
 
-      var eventDate = eventsData[i][0];
-      var dateStr = eventDate instanceof Date
-        ? Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : eventDate.toString().trim();
+      var dateStr = eventDateStr_(eventsData[i][0]);
 
       var slotsReserved = parseInt(eventsData[i][3]) || 0;
       var totalSlots = slotsReserved * 4;
 
       // Count confirmed players for this specific event
-      var formData = formSheet.getDataRange().getValues();
       var responseMap = {};
       for (var k = 1; k < formData.length; k++) {
         var name = formData[k][1].toString().trim();
         var response = formData[k][2].toString().trim();
-        var rawEventId = formData[k][6];
-      var rowEventId = '';
-      if (rawEventId instanceof Date) {
-        rowEventId = Utilities.formatDate(rawEventId, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      } else if (rawEventId) {
-        rowEventId = rawEventId.toString().trim();
-      }
         if (name === '') continue;
-        if (rowEventId === dateStr) {
+        if (eventDateStr_(formData[k][6]) === dateStr) {
           responseMap[name] = { response: response, guest: formData[k][7] ? formData[k][7].toString().trim() : '' };
         }
       }
@@ -303,11 +305,7 @@ function createEvent(params) {
     var newDateStr = params.date.toString().trim();
     var existing = sheet.getDataRange().getValues();
     for (var e = 1; e < existing.length; e++) {
-      var ed = existing[e][0];
-      var edStr = ed instanceof Date
-        ? Utilities.formatDate(ed, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : ed.toString().trim();
-      if (edStr === newDateStr) {
+      if (eventDateStr_(existing[e][0]) === newDateStr) {
         var pretty = Utilities.formatDate(date, Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy');
         return ContentService.createTextOutput(JSON.stringify({
           error: 'An outing is already scheduled for ' + pretty + '. Only one outing per date is allowed - edit or delete the existing event first.',
@@ -338,31 +336,9 @@ function getConfirmedPlayers(eventId) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var formSheet = ss.getSheetByName('Form Responses');
-    var playersSheet = ss.getSheetByName('Players');
-    var eventsSheet = ss.getSheetByName('Events');
 
-    var eventsData = eventsSheet.getDataRange().getValues();
-    var slotsReserved = 0;
-
-    for (var i = 1; i < eventsData.length; i++) {
-      var eventDate = eventsData[i][0];
-      var dateStr = eventDate instanceof Date
-        ? Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : eventDate.toString().trim();
-      if (dateStr === eventId) {
-        slotsReserved = parseInt(eventsData[i][3]) * 4;
-        break;
-      }
-    }
-
-    var playersData = playersSheet.getDataRange().getValues();
-    var preferredMap = {};
-    var avoidMap = {};
-    for (var i = 1; i < playersData.length; i++) {
-      var name = playersData[i][0].toString().trim();
-      preferredMap[name] = playersData[i][7] ? playersData[i][7].toString().trim() : '';
-      avoidMap[name] = playersData[i][8] ? playersData[i][8].toString().trim() : '';
-    }
+    var found = findEventRow_(eventId);
+    var slotsReserved = found ? (parseInt(found.row[3]) || 0) * 4 : 0;
 
     var formData = formSheet.getDataRange().getValues();
     var responseMap = {};
@@ -371,35 +347,26 @@ function getConfirmedPlayers(eventId) {
       var name = formData[i][1].toString().trim();
       var response = formData[i][2].toString().trim();
       var walkRide = formData[i][3].toString().trim();
-      var rawEventId = formData[i][6];
-      var rowEventId = '';
-      if (rawEventId instanceof Date) {
-        rowEventId = Utilities.formatDate(rawEventId, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-      } else if (rawEventId) {
-        rowEventId = rawEventId.toString().trim().replace('EVT-', '');
-      }
       if (name === '') continue;
-      if (rowEventId === eventId) {
+      if (eventDateStr_(formData[i][6]).replace('EVT-', '') === eventId) {
         responseMap[name] = {
           playing: response,
           walkRide: walkRide || 'No preference',
-          comments: formData[i][5] ? formData[i][5].toString().trim() : '',
           scoring: formData[i][4] ? formData[i][4].toString().trim() : 'No Preference',
           guest: formData[i][7] ? formData[i][7].toString().trim() : ''
         };
       }
     }
 
+    // RSVP comments intentionally stay in the spreadsheet only - the organizer
+    // reads them there while pairing; they are transient and per-event.
     var confirmed = [];
     for (var name in responseMap) {
       if (responseMap[name].playing === 'Yes') {
         confirmed.push({
           name: name,
           walkRide: responseMap[name].walkRide,
-          comments: responseMap[name].comments || '',
-          scoring: responseMap[name].scoring || 'No Preference',
-          preferred: preferredMap[name] || '',
-          avoid: avoidMap[name] || ''
+          scoring: responseMap[name].scoring || 'No Preference'
         });
       }
     }
@@ -459,23 +426,12 @@ function savePairings(params) {
     var eventId = params.eventId;
 
     // Get event details
-    var eventsData = eventsSheet.getDataRange().getValues();
-    var eventRow = null;
-    for (var i = 1; i < eventsData.length; i++) {
-      var eventDate = eventsData[i][0];
-      var dateStr = eventDate instanceof Date
-        ? Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : eventDate.toString().trim();
-      if (dateStr === eventId) {
-        eventRow = eventsData[i];
-        break;
-      }
-    }
-
-    if (!eventRow) {
+    var found = findEventRow_(eventId);
+    if (!found) {
       return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    var eventRow = found.row;
 
     var venueName = eventRow[1].toString();
     var eventDate = eventRow[0];
@@ -594,6 +550,16 @@ function savePairings(params) {
       }
     });
 
+    // If nothing went out at all (e.g. Brevo down / bad API key), leave the
+    // event Open and skip the history write so the organizer can simply fix
+    // the problem and hit Send again without creating duplicate history rows.
+    if (sent === 0 && recipients.length > 0) {
+      return ContentService.createTextOutput(JSON.stringify({
+        error: 'No emails were sent (' + (sendErrors[0] || 'unknown send failure') + '). The event is still open - try again.',
+        errors: sendErrors
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     // Save to Pairing History
     foursomes.forEach(function(foursome) {
       var historyRow = [formattedDate];
@@ -603,17 +569,8 @@ function savePairings(params) {
       historySheet.appendRow(historyRow);
     });
 
-    // Update event status to Closed
-    for (var i = 1; i < eventsData.length; i++) {
-      var eventDate2 = eventsData[i][0];
-      var dateStr2 = eventDate2 instanceof Date
-        ? Utilities.formatDate(eventDate2, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : eventDate2.toString().trim();
-      if (dateStr2 === eventId) {
-        eventsSheet.getRange(i + 1, 6).setValue('Closed');
-        break;
-      }
-    }
+    // Close the event now that the pairings are out.
+    eventsSheet.getRange(found.rowIndex, 6).setValue('Closed');
 
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
@@ -644,8 +601,9 @@ function buildPairingsEmailHtml_(o) {
     var teeTimeStr = fh + ':' + (fm < 10 ? '0' + fm : fm) + ' ' + fap;
 
     var playerRows = foursome.map(function(player) {
+      // Guest names originate from the public RSVP form - escape them.
       return '<p style="margin:4px 0;font-size:15px;color:#1a2332;">' +
-        player.name + ' <span style="color:#5d6d7e;font-size:13px;">(' + player.walkRide + ')</span></p>';
+        escapeHtml_(player.name) + ' <span style="color:#5d6d7e;font-size:13px;">(' + escapeHtml_(player.walkRide) + ')</span></p>';
     }).join('');
 
     return '<div style="background:#f0f4f8;padding:14px 16px;border-radius:8px;margin:0 0 12px;">' +
@@ -683,7 +641,6 @@ function buildPairingsEmailHtml_(o) {
 function previewPairings(params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var eventsSheet = ss.getSheetByName('Events');
     var eventId = params.eventId;
 
     var foursomes = (params.foursomes || '').split(';').map(function(fsStr) {
@@ -695,19 +652,12 @@ function previewPairings(params) {
     });
 
     // Find the event row
-    var eventsData = eventsSheet.getDataRange().getValues();
-    var eventRow = null;
-    for (var i = 1; i < eventsData.length; i++) {
-      var eventDate = eventsData[i][0];
-      var dateStr = eventDate instanceof Date
-        ? Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : eventDate.toString().trim();
-      if (dateStr === eventId) { eventRow = eventsData[i]; break; }
-    }
-    if (!eventRow) {
+    var found = findEventRow_(eventId);
+    if (!found) {
       return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    var eventRow = found.row;
 
     var venueName = eventRow[1].toString();
     var formattedDate = eventRow[0] instanceof Date
@@ -901,7 +851,11 @@ function broadcastPreview(params) {
   try {
     var group = (params && params.group) || 'Main Group';
     var count = selectRecipients_(group).length;
-    return ContentService.createTextOutput(JSON.stringify({ success: true, count: count, group: group }))
+    // If the organizer has typed a message, also return the exact email HTML
+    // so the broadcast modal can show a preview (mirrors previewInvite).
+    var body = (params && params.body) ? params.body.toString() : '';
+    var html = body.trim() ? buildBroadcastEmailHtml_(body, (params.imageUrl || '').toString()) : '';
+    return ContentService.createTextOutput(JSON.stringify({ success: true, count: count, group: group, html: html }))
       .setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
     return ContentService.createTextOutput(JSON.stringify({error: e.message}))
@@ -1204,45 +1158,37 @@ function getStats() {
 function getEventInfo(eventId) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var eventsSheet = ss.getSheetByName('Events');
     var coursesSheet = ss.getSheetByName('Courses');
-    var eventsData = eventsSheet.getDataRange().getValues();
 
-    for (var i = 1; i < eventsData.length; i++) {
-      var eventDate = eventsData[i][0];
-      var dateStr = eventDate instanceof Date
-        ? Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : eventDate.toString().trim();
+    var found = findEventRow_(eventId);
+    if (!found) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
-      if (dateStr === eventId) {
-        var venueName = eventsData[i][1].toString();
-        var startTime = eventsData[i][2];
-        var timeStr = startTime instanceof Date
-          ? Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'h:mm a')
-          : startTime.toString();
+    var venueName = found.row[1].toString();
+    var startTime = found.row[2];
+    var timeStr = startTime instanceof Date
+      ? Utilities.formatDate(startTime, Session.getScriptTimeZone(), 'h:mm a')
+      : startTime.toString();
 
-        var teeTimeInterval = 9;
-        var courseData = coursesSheet.getDataRange().getValues();
-        for (var c = 1; c < courseData.length; c++) {
-          if (courseData[c][0].toString() === venueName) {
-            var interval = parseInt(courseData[c][10]);
-            if (!isNaN(interval) && interval > 0) teeTimeInterval = interval;
-            break;
-          }
-        }
-
-        return ContentService.createTextOutput(JSON.stringify({
-          event: {
-            venue: venueName,
-            time: timeStr,
-            interval: teeTimeInterval
-          }
-        })).setMimeType(ContentService.MimeType.JSON);
+    var teeTimeInterval = 9;
+    var courseData = coursesSheet.getDataRange().getValues();
+    for (var c = 1; c < courseData.length; c++) {
+      if (courseData[c][0].toString() === venueName) {
+        var interval = parseInt(courseData[c][10]);
+        if (!isNaN(interval) && interval > 0) teeTimeInterval = interval;
+        break;
       }
     }
 
-    return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
-      .setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({
+      event: {
+        venue: venueName,
+        time: timeStr,
+        interval: teeTimeInterval
+      }
+    })).setMimeType(ContentService.MimeType.JSON);
 
   } catch(e) {
     return ContentService.createTextOutput(JSON.stringify({error: e.message}))
@@ -1350,10 +1296,7 @@ function getResponseStatusMap_(eventId) {
   for (var i = 1; i < formData.length; i++) {
     var nm = formData[i][1] ? formData[i][1].toString().trim().toLowerCase() : '';
     if (!nm) continue;
-    var raw = formData[i][6];  // col G Event ID
-    var rowEventId = '';
-    if (raw instanceof Date) rowEventId = Utilities.formatDate(raw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    else if (raw) rowEventId = raw.toString().trim().replace('EVT-', '');
+    var rowEventId = eventDateStr_(formData[i][6]).replace('EVT-', '');  // col G Event ID
     if (rowEventId === eventId) status[nm] = formData[i][2] ? formData[i][2].toString().trim() : '';
   }
   return status;
@@ -1385,10 +1328,7 @@ function getSignedUpNames_(eventId) {
   for (var i = 1; i < formData.length; i++) {
     var lastFirst = formData[i][1] ? formData[i][1].toString().trim() : '';
     if (!lastFirst) continue;
-    var raw = formData[i][6];  // col G Event ID
-    var rowEventId = '';
-    if (raw instanceof Date) rowEventId = Utilities.formatDate(raw, Session.getScriptTimeZone(), 'yyyy-MM-dd');
-    else if (raw) rowEventId = raw.toString().trim().replace('EVT-', '');
+    var rowEventId = eventDateStr_(formData[i][6]).replace('EVT-', '');  // col G Event ID
     if (rowEventId !== eventId) continue;
     responseMap[lastFirst] = {
       playing: formData[i][2] ? formData[i][2].toString().trim() : '',
@@ -1411,8 +1351,6 @@ function getSignedUpNames_(eventId) {
 function previewInvite(params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var playersSheet = ss.getSheetByName('Players');
-    var eventsSheet = ss.getSheetByName('Events');
     var coursesSheet = ss.getSheetByName('Courses');
 
     var eventId = params.eventId;
@@ -1422,19 +1360,12 @@ function previewInvite(params) {
     var audience = params.audience || 'unresponded';
     var responded = remindOnly ? computeRemindExcludeSet_(getResponseStatusMap_(eventId), audience) : {};
 
-    var eventsData = eventsSheet.getDataRange().getValues();
-    var eventRow = null;
-    for (var i = 1; i < eventsData.length; i++) {
-      var eventDate = eventsData[i][0];
-      var dateStr = eventDate instanceof Date
-        ? Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : eventDate.toString().trim();
-      if (dateStr === eventId) { eventRow = eventsData[i]; break; }
-    }
-    if (!eventRow) {
+    var found = findEventRow_(eventId);
+    if (!found) {
       return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    var eventRow = found.row;
 
     var venueName = eventRow[1].toString();
     var startTime = eventRow[2];
@@ -1500,8 +1431,6 @@ function previewInvite(params) {
 function sendInviteEmails(params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var playersSheet = ss.getSheetByName('Players');
-    var eventsSheet = ss.getSheetByName('Events');
     var coursesSheet = ss.getSheetByName('Courses');
 
     var eventId = params.eventId;
@@ -1512,23 +1441,12 @@ function sendInviteEmails(params) {
     var responded = remindOnly ? computeRemindExcludeSet_(getResponseStatusMap_(eventId), audience) : {};
 
     // Get event details
-    var eventsData = eventsSheet.getDataRange().getValues();
-    var eventRow = null;
-    for (var i = 1; i < eventsData.length; i++) {
-      var eventDate = eventsData[i][0];
-      var dateStr = eventDate instanceof Date
-        ? Utilities.formatDate(eventDate, Session.getScriptTimeZone(), 'yyyy-MM-dd')
-        : eventDate.toString().trim();
-      if (dateStr === eventId) {
-        eventRow = eventsData[i];
-        break;
-      }
-    }
-
-    if (!eventRow) {
+    var found = findEventRow_(eventId);
+    if (!found) {
       return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
         .setMimeType(ContentService.MimeType.JSON);
     }
+    var eventRow = found.row;
 
     var venueName = eventRow[1].toString();
     var startTime = eventRow[2];
@@ -1568,13 +1486,6 @@ function sendInviteEmails(params) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
-    // Get Resend API key from Script Properties
-    var apiKey = PropertiesService.getScriptProperties().getProperty('BREVO_API_KEY');
-    if (!apiKey) {
-      return ContentService.createTextOutput(JSON.stringify({error: 'Brevo API key not configured (Script Property BREVO_API_KEY)'}))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
     var baseUrl = 'https://ronsteeballers.github.io';
     var signupUrl = baseUrl + '/signup.html?event=' + eventId;
     var sent = 0;
@@ -1596,31 +1507,12 @@ function sendInviteEmails(params) {
         rsvpUrl: rsvpUrl, signupUrl: signupUrl
       });
 
-      try {
-        var response = UrlFetchApp.fetch('https://api.brevo.com/v3/smtp/email', {
-          method: 'post',
-          headers: {
-            'api-key': apiKey,
-            'Content-Type': 'application/json'
-          },
-          payload: JSON.stringify({
-            sender: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
-            replyTo: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
-            to: [{ email: recipient.email, name: recipient.firstName }],
-            subject: (remindOnly ? 'Reminder: ' : '') + 'Golf Outing - ' + formattedDate + ' at ' + venueName,
-            htmlContent: htmlBody
-          }),
-          muteHttpExceptions: true
-        });
-
-        var responseCode = response.getResponseCode();
-        if (responseCode === 200 || responseCode === 201) {
-          sent++;
-        } else {
-          errors.push(recipient.email + ': ' + response.getContentText());
-        }
-      } catch(err) {
-        errors.push(recipient.email + ': ' + err.message);
+      var subject = (remindOnly ? 'Reminder: ' : '') + 'Golf Outing - ' + formattedDate + ' at ' + venueName;
+      var sendResult = sendBrevoEmail_(recipient.email, recipient.firstName, subject, htmlBody);
+      if (sendResult.ok) {
+        sent++;
+      } else {
+        errors.push(recipient.email + ': ' + sendResult.error);
       }
     });
 
@@ -1636,8 +1528,40 @@ function sendInviteEmails(params) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
+// Public RSVP endpoint (unauthenticated by design - reached from emailed links).
+// Validates the submission against the sheets before writing anything: the
+// player must exist in the Players tab and the event must exist and be Open.
 function submitRSVP(params) {
-  return writeRsvpRow_((params.playerName || '').toString(), params);
+  var playerName = (params.playerName || '').toString().trim();
+  var eventId = (params.eventId || '').toString().trim();
+
+  var found = findEventRow_(eventId);
+  if (!found) {
+    return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+  if (found.row[5] !== 'Open') {
+    return ContentService.createTextOutput(JSON.stringify({
+      error: 'This outing is closed - pairings have already been sent. Contact Ron if your plans changed.',
+      closed: true
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  var playersData = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
+  var canonical = '';
+  for (var i = 1; i < playersData.length; i++) {
+    var lastFirst = playersData[i][0].toString().trim();
+    if (lastFirst && lastFirst.toLowerCase() === playerName.toLowerCase()) {
+      canonical = lastFirst;   // write the roster's exact casing
+      break;
+    }
+  }
+  if (!canonical) {
+    return ContentService.createTextOutput(JSON.stringify({error: 'Player not found - please use the link from your invite email.'}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+
+  return writeRsvpRow_(canonical, params);
 }
 
 // Shared by submitRSVP (player-submitted, playerName trusted from the RSVP link)
@@ -1648,8 +1572,11 @@ function writeRsvpRow_(playerName, params) {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var formSheet = ss.getSheetByName('Form Responses');
 
-    var guestFirst = (params.guestFirst || '').toString().trim();
-    var guestLast = (params.guestLast || '').toString().trim();
+    // Strip the pairing-payload delimiters (| ; ,) from guest names - a guest
+    // named with one of them would corrupt the foursomes string sent by the
+    // pairing page.
+    var guestFirst = (params.guestFirst || '').toString().replace(/[|;,]/g, ' ').trim();
+    var guestLast = (params.guestLast || '').toString().replace(/[|;,]/g, ' ').trim();
     var guestName = (guestFirst + ' ' + guestLast).replace(/\s+/g, ' ').trim();
     var playingYes = (params.playing === 'Yes');
 
