@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a5276">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
   <title>Organizer Dashboard — RonsTeeBallers</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -396,7 +398,7 @@
     </div>
     <div class="form-group">
       <label class="form-label">Message</label>
-      <textarea class="form-input" id="broadcast-body" rows="8" style="resize:vertical;" placeholder="Type your message — you can paste a screenshot right into this box."></textarea>
+      <textarea class="form-input" id="broadcast-body" rows="8" style="resize:vertical;" placeholder="Type your message — you can paste a screenshot right into this box." onchange="loadBroadcastCount()"></textarea>
     </div>
     <div class="form-group">
       <label class="form-label">Image (optional)</label>
@@ -407,6 +409,10 @@
         <img id="broadcast-image-preview" alt="" style="max-width:100%;border-radius:8px;border:1px solid #e0e8f0;">
         <div><button type="button" class="btn btn-secondary" style="margin-top:8px;padding:8px 14px;font-size:14px;" onclick="clearBroadcastImage()">Remove image</button></div>
       </div>
+    </div>
+    <div class="form-group" id="broadcast-preview-group" style="display:none;">
+      <label class="form-label">Preview — exactly what players receive</label>
+      <iframe id="broadcast-frame" title="Broadcast preview" style="width:100%;height:300px;border:1px solid #d0d8e4;border-radius:8px;background:white;"></iframe>
     </div>
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideBroadcast()">Cancel</button>
@@ -633,8 +639,13 @@
 <div class="toast" id="toast"></div>
 <script>
   var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxTDDH0nhMzS4YycZImyXV6w_cZr9j1jrF4A9VwljttPzNVH1oE5Xgx3c_8QXveneWA/exec';
-  var currentEventId = '';
   var PASSCODE = localStorage.getItem('rtb_passcode') || '';
+
+  // Escape user/sheet-originated text before dropping it into innerHTML.
+  function esc(s) {
+    return (s || '').toString()
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
 
   function ensureOrganizerAccess(onOk) {
     jsonpCall('checkPasscode', { passcode: PASSCODE }, function(data) {
@@ -697,9 +708,14 @@
     setTimeout(function() { t.classList.remove('show'); }, 3000);
   }
 
-  function jsonpCall(action, params, callback) {
-    var fnName = 'handle_' + action.replace(/[^a-z]/gi,'_') + '_' + Date.now();
-    window[fnName] = function(data) { callback(data); };
+  var jsonpSeq = 0;
+
+  // JSONP with a timeout and error fallback: the callback ALWAYS fires exactly
+  // once - with the server's response, or with {error: ...} on timeout/failure -
+  // so buttons never stay stuck on "Sending..." after a dropped request.
+  // timeoutMs defaults to 15s; pass more for long jobs (bulk sends, tee-time search).
+  function jsonpCall(action, params, callback, timeoutMs) {
+    var fnName = 'handle_' + action.replace(/[^a-z0-9]/gi,'_') + '_' + (++jsonpSeq) + '_' + Date.now();
 
     var url = BACKEND_URL + '?action=' + action + '&callback=' + fnName;
     if (params) {
@@ -710,32 +726,45 @@
     if (action !== 'checkPasscode') url += '&passcode=' + encodeURIComponent(PASSCODE);
 
     var script = document.createElement('script');
+    var done = false;
+    function finish(data) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      delete window[fnName];
+      if (script.parentNode) script.parentNode.removeChild(script);
+      callback(data);
+    }
+    var timer = setTimeout(function() {
+      finish({ error: 'No response from the server. This can be caused by a bad connection or Safari’s "Prevent Cross-Site Tracking" setting — check and try again.' });
+    }, timeoutMs || 15000);
+    window[fnName] = finish;
+    script.onerror = function() { finish({ error: 'Could not reach the server (blocked or network error). Please try again.' }); };
     script.src = url;
     document.body.appendChild(script);
   }
 
-  function loadEvents() {
-    var timeout = setTimeout(function() {
-      document.getElementById('loading').style.display = 'none';
-      document.getElementById('app').style.display = 'block';
-      document.getElementById('events-container').innerHTML =
-        '<div class="empty-events"><div class="icon">⚠️</div><p>Could not load events.<br>Check your connection and refresh.</p></div>';
-    }, 8000);
+  var openEvents = [];  // events shown on the dashboard; buttons reference them by index
 
+  function loadEvents() {
     jsonpCall('getOpenEvents', {}, function(data) {
-      clearTimeout(timeout);
       document.getElementById('loading').style.display = 'none';
       document.getElementById('app').style.display = 'block';
 
       var container = document.getElementById('events-container');
 
+      if (data.error) {
+        container.innerHTML = '<div class="empty-events"><div class="icon">⚠️</div><p>Could not load events.<br>' + esc(data.error) + '</p></div>';
+        return;
+      }
       if (!data.events || data.events.length === 0) {
         container.innerHTML = '<div class="empty-events"><div class="icon">📅</div><p>No open events.<br>Create one to get started.</p></div>';
         return;
       }
 
+      openEvents = data.events;
       var html = '';
-      data.events.forEach(function(event) {
+      data.events.forEach(function(event, idx) {
         var pct = event.totalSlots > 0 ? Math.min((event.confirmed / event.totalSlots) * 100, 100) : 0;
         var isOver = event.confirmed > event.totalSlots;
         var isFull = event.confirmed === event.totalSlots;
@@ -743,21 +772,21 @@
         var pillClass = isOver ? 'stat-pill warning' : isFull ? 'stat-pill success' : 'stat-pill';
         var fillClass = isOver ? 'progress-fill over' : isFull ? 'progress-fill full' : 'progress-fill';
 
-        if (currentEventId === '') currentEventId = event.id;
-
+        // Buttons pass the event's index, not inline strings - a venue name
+        // containing a quote/apostrophe must not break the onclick handlers.
         html += '<div class="' + cardClass + '">';
-        html += '<div class="event-venue">' + event.venue + '</div>';
-        html += '<div class="event-date">' + formatDate(event.date) + ' &bull; ' + event.time + '</div>';
+        html += '<div class="event-venue">' + esc(event.venue) + '</div>';
+        html += '<div class="event-date">' + formatDate(event.date) + ' &bull; ' + esc(event.time) + '</div>';
         html += '<div class="event-stats">';
         html += '<span class="' + pillClass + '">' + event.confirmed + ' of ' + event.totalSlots + ' confirmed</span>';
         if (isOver) html += '<span class="stat-pill warning">Oversubscribed</span>';
         html += '</div>';
         html += '<div class="progress-bar"><div class="' + fillClass + '" style="width:' + pct + '%"></div></div>';
         html += '<div class="event-actions">';
-        html += '<button class="btn btn-secondary" onclick="viewPlayers(\'' + event.id + '\')">Players</button>';
-        html += '<button class="btn btn-primary" onclick="showInvitePreview(\'' + event.id + '\',\'' + event.venue + '\',\'' + event.mailingList + '\')">Invite</button>';
-        html += '<button class="btn btn-secondary" onclick="showRemindPreview(\'' + event.id + '\',\'' + event.venue + '\',\'' + event.mailingList + '\',' + Math.max(0, event.totalSlots - event.confirmed) + ')">Remind</button>';
-        html += '<button class="btn btn-primary" onclick="goToPairing(\'' + event.id + '\')">Pair</button>';
+        html += '<button class="btn btn-secondary" onclick="viewPlayers(' + idx + ')">Players</button>';
+        html += '<button class="btn btn-primary" onclick="showInvitePreview(' + idx + ')">Invite</button>';
+        html += '<button class="btn btn-secondary" onclick="showRemindPreview(' + idx + ')">Remind</button>';
+        html += '<button class="btn btn-primary" onclick="goToPairing(' + idx + ')">Pair</button>';
         html += '</div>';
         html += '</div>';
       });
@@ -765,22 +794,23 @@
       container.innerHTML = html;
     });
   }
-function viewPlayers(eventId) {
-    window.location.href = 'signup.html?event=' + eventId;
+function viewPlayers(idx) {
+    window.location.href = 'signup.html?event=' + encodeURIComponent(openEvents[idx].id);
   }
 
-  function goToPairing(eventId) {
-    window.location.href = 'pairing.html?event=' + eventId;
+  function goToPairing(idx) {
+    window.location.href = 'pairing.html?event=' + encodeURIComponent(openEvents[idx].id);
   }
 
   var currentInviteEventId = '';
   var currentMailingList = '';
 
-  function showInvitePreview(eventId, venue, mailingList) {
-    currentInviteEventId = eventId;
-    currentMailingList = mailingList;
+  function showInvitePreview(idx) {
+    var event = openEvents[idx];
+    currentInviteEventId = event.id;
+    currentMailingList = event.mailingList;
     document.getElementById('invite-details').textContent =
-      venue + ' — ' + formatDate(eventId);
+      event.venue + ' — ' + formatDate(event.id);
     document.getElementById('btn-send-invite').disabled = false;
     document.getElementById('btn-send-invite').textContent = 'Send Invites';
     document.getElementById('invite-frame').srcdoc = '';
@@ -806,7 +836,7 @@ function viewPlayers(eventId) {
       } else {
         status.textContent = 'Preview error: ' + ((data && data.error) || 'unknown');
       }
-    });
+    }, 30000);
   }
 
   function hideInvitePreview() {
@@ -831,7 +861,7 @@ function viewPlayers(eventId) {
         document.getElementById('invite-preview-status').textContent =
           'Send error: ' + ((data && data.error) || 'Unknown error');
       }
-    });
+    }, 300000);  // one Brevo call per recipient - a full send can take minutes
   }
   
   // ── Remind non-responders ─────────────────────────────────────────
@@ -844,15 +874,17 @@ function viewPlayers(eventId) {
     all: ''
   };
 
-  function showRemindPreview(eventId, venue, mailingList, openSpots) {
-    currentRemindEventId = eventId;
-    currentRemindMailingList = mailingList;
+  function showRemindPreview(idx) {
+    var event = openEvents[idx];
+    var openSpots = Math.max(0, event.totalSlots - event.confirmed);
+    currentRemindEventId = event.id;
+    currentRemindMailingList = event.mailingList;
     var spotWord = (openSpots === 1) ? 'spot' : 'spots';
     document.getElementById('remind-message').value =
-      'Quick reminder -- we have ' + openSpots + ' ' + spotWord + ' open for ' + venue +
+      'Quick reminder -- we have ' + openSpots + ' ' + spotWord + ' open for ' + event.venue +
       '. Tap I\'M IN below to grab a spot. Thanks! -- Ron';
     document.getElementById('remind-audience').value = 'unresponded';
-    document.getElementById('remind-details').textContent = venue + ' — ' + formatDate(eventId);
+    document.getElementById('remind-details').textContent = event.venue + ' — ' + formatDate(event.id);
     document.getElementById('btn-send-remind').disabled = false;
     document.getElementById('btn-send-remind').textContent = 'Send Reminders';
     document.getElementById('remind-frame').srcdoc = '';
@@ -883,7 +915,7 @@ function viewPlayers(eventId) {
       } else {
         status.textContent = 'Preview error: ' + ((data && data.error) || 'unknown');
       }
-    });
+    }, 30000);
   }
 
   function hideRemindPreview() {
@@ -910,7 +942,7 @@ function viewPlayers(eventId) {
         document.getElementById('remind-preview-status').textContent =
           'Send error: ' + ((data && data.error) || 'Unknown error');
       }
-    });
+    }, 300000);  // one Brevo call per recipient - a full send can take minutes
   }
 
   // ── Broadcast email to active players in a selected group ─────────
@@ -934,15 +966,24 @@ function viewPlayers(eventId) {
     loadBroadcastCount();
   }
 
-  // Refresh the recipient count for the currently selected group.
+  // Refresh the recipient count for the currently selected group, and (once a
+  // message has been typed) the exact-email preview below the form.
   function loadBroadcastCount() {
     var group = document.getElementById('broadcast-group').value;
+    var body = document.getElementById('broadcast-body').value;
     document.getElementById('broadcast-info').textContent = 'Loading recipient count…';
-    jsonpCall('broadcastPreview', { group: group }, function(data) {
+    jsonpCall('broadcastPreview', { group: group, body: body, imageUrl: broadcastImageUrl }, function(data) {
       if (data && data.success) {
         document.getElementById('broadcast-info').textContent =
           'This will email ' + data.count + ' active ' + group + ' player' + (data.count === 1 ? '' : 's') +
           '. (Brevo free tier allows ~300 emails/day.)';
+        var wrap = document.getElementById('broadcast-preview-group');
+        if (data.html) {
+          document.getElementById('broadcast-frame').srcdoc = data.html;
+          wrap.style.display = 'block';
+        } else {
+          wrap.style.display = 'none';
+        }
       } else {
         document.getElementById('broadcast-info').textContent =
           'Could not load recipient count: ' + ((data && data.error) || 'unknown');
@@ -1018,6 +1059,7 @@ function viewPlayers(eventId) {
       broadcastImageState = 'ready';
       document.getElementById('broadcast-image-status').textContent = 'Image ready ✓';
       setBroadcastSendEnabled(true);
+      loadBroadcastCount();  // refresh the preview with the image included
     };
     probe.onerror = function() {
       setTimeout(function() { pollBroadcastImage(hostedUrl, attempt + 1); }, 4000);
@@ -1032,6 +1074,8 @@ function viewPlayers(eventId) {
     var w = document.getElementById('broadcast-image-preview-wrap'); if (w) w.style.display = 'none';
     var s = document.getElementById('broadcast-image-status'); if (s) s.textContent = '';
     setBroadcastSendEnabled(true);
+    // Refresh the email preview without the image (skip during modal setup).
+    if (document.getElementById('broadcast-modal').classList.contains('show')) loadBroadcastCount();
   }
 
   function sendBroadcast() {
@@ -1056,7 +1100,7 @@ function viewPlayers(eventId) {
         document.getElementById('broadcast-info').textContent =
           'Send error: ' + ((data && data.error) || 'Unknown error');
       }
-    });
+    }, 300000);  // one Brevo call per recipient - a full send can take minutes
   }
 
   function showCreateEvent() {
@@ -1117,41 +1161,15 @@ function viewPlayers(eventId) {
       btn.disabled = true;
       btn.textContent = 'Creating...';
 
-      var done = false;
-      var script;
-      function finish(ok, msg) {
-        if (done) return;
-        done = true;
-        clearTimeout(timer);
-        try { if (script && script.parentNode) script.parentNode.removeChild(script); } catch (_) {}
+      jsonpCall('createEvent', {
+        date: date, venue: venue, time: time,
+        slots: slots, mailingList: mailingList, notes: notes
+      }, function(data) {
         btn.disabled = false;
         btn.textContent = 'Create Event';
-        if (ok) { hideCreateEvent(); showToast('Event created!'); loadEvents(); }
-        else { showCreateError(msg); }
-      }
-
-      var fn = 'handle_create_' + Date.now();
-      window[fn] = function(data) {
-        if (data && data.success) finish(true);
-        else finish(false, 'Server replied with an error: ' + ((data && data.error) || 'unknown'));
-      };
-      var timer = setTimeout(function() {
-        finish(false, 'No response after 12s. The request may be blocked by Safari "Prevent Cross-Site Tracking" or a content blocker. Try toggling that off, or use the Mac.');
-      }, 12000);
-
-      var url = BACKEND_URL + '?action=createEvent&callback=' + fn
-        + '&date=' + encodeURIComponent(date)
-        + '&venue=' + encodeURIComponent(venue)
-        + '&time=' + encodeURIComponent(time)
-        + '&slots=' + encodeURIComponent(slots)
-        + '&mailingList=' + encodeURIComponent(mailingList)
-        + '&notes=' + encodeURIComponent(notes)
-        + '&passcode=' + encodeURIComponent(PASSCODE);
-
-      script = document.createElement('script');
-      script.src = url;
-      script.onerror = function() { finish(false, 'Could not load from the server (script blocked or network error).'); };
-      document.body.appendChild(script);
+        if (data && data.success) { hideCreateEvent(); showToast('Event created!'); loadEvents(); }
+        else { showCreateError((data && data.error) || 'Unknown error'); }
+      });
     } catch (e) {
       if (btn) { btn.disabled = false; btn.textContent = 'Create Event'; }
       showCreateError('Script error: ' + e.message);
@@ -1223,8 +1241,8 @@ function viewPlayers(eventId) {
       return;
     }
     list.innerHTML = matches.map(function(p) {
-      return '<button type="button" class="imp-player-row" onclick="selectImpPlayer(\'' + p.slug + '\',\'' + p.name.replace(/'/g, "\\'") + '\')">' +
-        p.name + (p.active ? '' : '<span class="inactive-tag">Inactive</span>') + '</button>';
+      return '<button type="button" class="imp-player-row" onclick="selectImpPlayer(\'' + p.slug + '\',\'' + esc(p.name.replace(/'/g, "\\'")) + '\')">' +
+        esc(p.name) + (p.active ? '' : '<span class="inactive-tag">Inactive</span>') + '</button>';
     }).join('');
   }
 
@@ -1366,7 +1384,7 @@ function viewPlayers(eventId) {
     }
     list.innerHTML = matches.map(function(p) {
       return '<button type="button" class="imp-player-row" onclick="selectMpPlayerForEdit(\'' + p.slug + '\')">' +
-        p.name + (p.active ? '' : '<span class="inactive-tag">Inactive</span>') + '</button>';
+        esc(p.name) + (p.active ? '' : '<span class="inactive-tag">Inactive</span>') + '</button>';
     }).join('');
   }
 
@@ -1502,7 +1520,7 @@ function viewPlayers(eventId) {
       document.getElementById('tt-status').textContent =
         'Checked ' + data.results.length + ' courses.';
       renderTeeTimeResults(data.results);
-    });
+    }, 90000);  // checks each course's live tee sheet - can take a while
   }
 
   function renderTeeTimeResults(results) {

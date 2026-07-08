@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a5276">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
   <title>Golf Outing RSVP</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -281,11 +283,13 @@
       <h2>You're in!</h2>
       <p>Thanks! The proposed groups will be sent out before the outing. To see who else has signed up:</p>
       <a class="btn-signup-list" id="signup-list-link" href="#" target="_blank">See Who's Playing</a>
+      <p style="margin-top:20px;font-size:14px;color:#aab7c4;">Plans changed? Just reopen the link from your invite email and submit again.</p>
     </div>
     <div class="confirmation confirmation-no hidden" id="confirmation-no">
       <div class="icon">👋</div>
       <h2>No worries!</h2>
       <p>Thanks for letting us know. Hope to see you next time!</p>
+      <p style="font-size:14px;color:#aab7c4;">Plans changed? Just reopen the link from your invite email and submit again.</p>
     </div>
   </div>
 </div>
@@ -323,14 +327,31 @@
     el.classList.remove('hidden');
   }
 
-  function jsonpCall(action, params, callback) {
-    var fnName = 'cb_' + action.replace(/[^a-z]/gi,'_') + '_' + Date.now();
-    window[fnName] = callback;
+  var jsonpSeq = 0;
+
+  // JSONP with a timeout + error fallback so the callback always fires exactly
+  // once - either with the server response or with {error: ...}.
+  function jsonpCall(action, params, callback, timeoutMs) {
+    var fnName = 'cb_' + action.replace(/[^a-z0-9]/gi,'_') + '_' + (++jsonpSeq) + '_' + Date.now();
     var url = BACKEND_URL + '?action=' + action + '&callback=' + fnName;
     for (var k in params) {
       url += '&' + k + '=' + encodeURIComponent(params[k]);
     }
     var s = document.createElement('script');
+    var done = false;
+    function finish(data) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      delete window[fnName];
+      if (s.parentNode) s.parentNode.removeChild(s);
+      callback(data);
+    }
+    var timer = setTimeout(function() {
+      finish({ error: 'No response from the server. Check your connection and try again.' });
+    }, timeoutMs || 15000);
+    window[fnName] = finish;
+    s.onerror = function() { finish({ error: 'Could not reach the server. Check your connection and try again.' }); };
     s.src = url;
     document.head.appendChild(s);
   }
@@ -401,8 +422,16 @@
     var walkRideMap = { walk: 'Walk', ride: 'Ride', nopref: 'No preference', '': '' };
     var scoringMap = { ownball: 'Own Ball', scramble: 'Scramble', nopref: 'No Preference', '': '' };
 
-    var fnName = 'cb_submit_' + Date.now();
-    window[fnName] = function(data) {
+    jsonpCall('submitRSVP', {
+      eventId: eventId,
+      playerName: playerName,
+      playing: playingChoice === 'yes' ? 'Yes' : 'No',
+      walkRide: walkRideMap[walkRideChoice] || '',
+      scoring: scoringMap[scoringChoice] || '',
+      guestFirst: guestFirst,
+      guestLast: guestLast,
+      comments: document.getElementById('comments').value || ''
+    }, function(data) {
       if (data && data.error) {
         btn.disabled = false;
         btn.textContent = 'Submit RSVP';
@@ -418,23 +447,7 @@
         document.getElementById('confirmation-yes').classList.add('hidden');
         document.getElementById('confirmation-no').classList.remove('hidden');
       }
-    };
-
-    var url = BACKEND_URL
-      + '?action=submitRSVP'
-      + '&callback=' + fnName
-      + '&eventId=' + encodeURIComponent(eventId)
-      + '&playerName=' + encodeURIComponent(playerName)
-      + '&playing=' + encodeURIComponent(playingChoice === 'yes' ? 'Yes' : 'No')
-      + '&walkRide=' + encodeURIComponent(walkRideMap[walkRideChoice] || '')
-      + '&scoring=' + encodeURIComponent(scoringMap[scoringChoice] || '')
-      + '&guestFirst=' + encodeURIComponent(guestFirst)
-      + '&guestLast=' + encodeURIComponent(guestLast)
-      + '&comments=' + encodeURIComponent(document.getElementById('comments').value || '');
-
-    var s = document.createElement('script');
-    s.src = url;
-    document.head.appendChild(s);
+    }, 30000);
   }
   function init() {
     var p = getParams();
@@ -443,8 +456,12 @@
 
     jsonpCall('getEvent', {eventId: eventId, player: playerSlug}, function(data) {
       if (data.error) {
-        document.getElementById('loading').classList.remove('hidden');
-        document.getElementById('loading').textContent = 'Event not found.';
+        var loading = document.getElementById('loading');
+        loading.classList.remove('hidden');
+        // "closed" = the outing exists but pairings already went out.
+        loading.textContent = data.closed
+          ? 'This outing is closed — pairings have already been sent. Contact Ron if your plans changed.'
+          : data.error;
         return;
       }
 
@@ -455,8 +472,13 @@
       document.getElementById('event-date').textContent = formatDate(data.event.date);
 
       if (data.event.venueUrl) {
-        document.getElementById('event-venue').innerHTML =
-          '<a href="' + data.event.venueUrl + '" target="_blank">' + data.event.venue + '</a>';
+        var venueLink = document.createElement('a');
+        venueLink.href = data.event.venueUrl;
+        venueLink.target = '_blank';
+        venueLink.textContent = data.event.venue;
+        var venueEl = document.getElementById('event-venue');
+        venueEl.textContent = '';
+        venueEl.appendChild(venueLink);
       } else {
         document.getElementById('event-venue').textContent = data.event.venue;
       }
@@ -487,7 +509,5 @@
   }
   init();
 </script>
-</body>
-</html>
 </body>
 </html>

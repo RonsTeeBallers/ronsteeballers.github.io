@@ -2,7 +2,9 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a5276">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
   <title>Statistics — RonsTeeBallers</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -55,6 +57,7 @@
       text-transform: uppercase;
       letter-spacing: 0.8px;
       margin: 18px 16px 8px;
+      scroll-margin-top: 60px;   /* nav anchor targets must clear the sticky header */
     }
     .card {
       background: white;
@@ -175,10 +178,25 @@
       .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
   }
 
+  var jsonpSeq = 0;
+
   function jsonp(action, cb) {
-    var fn = 'cb_' + Date.now();
-    window[fn] = cb;
+    var fn = 'cb_' + action.replace(/[^a-z0-9]/gi,'_') + '_' + (++jsonpSeq) + '_' + Date.now();
     var s = document.createElement('script');
+    var done = false;
+    function finish(data) {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      delete window[fn];
+      if (s.parentNode) s.parentNode.removeChild(s);
+      cb(data);
+    }
+    var timer = setTimeout(function() {
+      finish({ error: 'no response from the server - check your connection and refresh' });
+    }, 20000);
+    window[fn] = finish;
+    s.onerror = function() { finish({ error: 'could not reach the server - check your connection and refresh' }); };
     s.src = BACKEND_URL + '?action=' + action + '&callback=' + fn;
     document.body.appendChild(s);
   }
