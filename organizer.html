@@ -323,6 +323,11 @@
       <span>Add / edit a player</span>
       <span class="arrow">›</span>
     </button>
+    <button class="tool-btn" onclick="showTeeTimeFinder()">
+      <span class="icon">🔍</span>
+      <span>Find tee times</span>
+      <span class="arrow">›</span>
+    </button>
   </div>
 
   <div class="bottom-spacer"></div>
@@ -545,6 +550,31 @@
         <button class="btn btn-primary" id="btn-mp-save" onclick="saveMpPlayer()">Save Player</button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Find Tee Times Modal -->
+<div class="modal-overlay" id="tee-time-modal">
+  <div class="modal">
+    <h2>Find Tee Times</h2>
+    <div class="form-group">
+      <label class="form-label">Date</label>
+      <input type="date" class="form-input" id="tt-date">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Earliest start time</label>
+      <input type="time" class="form-input" id="tt-earliest" value="07:00">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Consecutive tee times needed</label>
+      <input type="number" class="form-input" id="tt-count" value="5" min="1" max="10">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideTeeTimeFinder()">Cancel</button>
+      <button class="btn btn-primary" id="btn-tt-search" onclick="searchTeeTimes()">Search</button>
+    </div>
+    <div id="tt-status" style="font-size:13px;color:#5d6d7e;margin-top:12px;"></div>
+    <div id="tt-results" style="margin-top:8px;"></div>
   </div>
 </div>
 
@@ -1428,6 +1458,86 @@ function viewPlayers(eventId) {
         showMpError((data && data.error) || 'Unknown error');
       }
     });
+  }
+
+  function showTeeTimeFinder() {
+    document.getElementById('tt-status').textContent = '';
+    document.getElementById('tt-results').innerHTML = '';
+    if (!document.getElementById('tt-date').value) {
+      var tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      document.getElementById('tt-date').value = tomorrow.toISOString().slice(0, 10);
+    }
+    document.getElementById('tee-time-modal').classList.add('show');
+  }
+
+  function hideTeeTimeFinder() {
+    document.getElementById('tee-time-modal').classList.remove('show');
+  }
+
+  function searchTeeTimes() {
+    var date = document.getElementById('tt-date').value;
+    var earliestTime = document.getElementById('tt-earliest').value;
+    var minConsecutive = document.getElementById('tt-count').value;
+    if (!date) { showToast('Please choose a date.'); return; }
+
+    var btn = document.getElementById('btn-tt-search');
+    btn.disabled = true;
+    btn.textContent = 'Searching...';
+    document.getElementById('tt-results').innerHTML = '';
+    document.getElementById('tt-status').textContent =
+      'Checking courses live — this can take up to 30 seconds…';
+
+    jsonpCall('findTeeTimeAvailability', {
+      date: date,
+      earliestTime: earliestTime,
+      minConsecutive: minConsecutive
+    }, function(data) {
+      btn.disabled = false;
+      btn.textContent = 'Search';
+      if (!data || data.error) {
+        document.getElementById('tt-status').textContent = 'Error: ' + ((data && data.error) || 'Unknown error');
+        return;
+      }
+      document.getElementById('tt-status').textContent =
+        'Checked ' + data.results.length + ' courses.';
+      renderTeeTimeResults(data.results);
+    });
+  }
+
+  function renderTeeTimeResults(results) {
+    var styles = {
+      available: 'background:#eafaf1;color:#1e8449;',
+      none: 'background:#f4f6f8;color:#5d6d7e;',
+      manual: 'background:#fef9e7;color:#946c00;',
+      error: 'background:#fdf2f2;color:#922b21;'
+    };
+    document.getElementById('tt-results').innerHTML = results.map(function(r) {
+      var line;
+      if (r.status === 'available') {
+        line = '✅ ' + r.course + ' — ' + r.count + ' in a row starting ' + formatTtTime_(r.firstTime);
+      } else if (r.status === 'none') {
+        line = r.course + ' — no open block found';
+      } else if (r.status === 'manual') {
+        line = r.course + ' — call to check (not automated yet)';
+      } else {
+        line = r.course + ' — could not check';
+      }
+      var link = (r.status === 'available' || r.status === 'manual') && r.bookingUrl
+        ? ' <a href="' + r.bookingUrl + '" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">Open ›</a>'
+        : '';
+      return '<div style="' + styles[r.status] + 'padding:10px 12px;border-radius:8px;margin-bottom:6px;font-size:14px;">' +
+        line + link + '</div>';
+    }).join('');
+  }
+
+  function formatTtTime_(hhmm) {
+    var parts = hhmm.split(':');
+    var h = parseInt(parts[0]);
+    var m = parts[1];
+    var ap = h >= 12 ? 'PM' : 'AM';
+    var h12 = h % 12; if (h12 === 0) h12 = 12;
+    return h12 + ':' + m + ' ' + ap;
   }
 
   ensureOrganizerAccess(loadEvents);

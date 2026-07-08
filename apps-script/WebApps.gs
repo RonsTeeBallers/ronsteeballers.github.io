@@ -4,7 +4,7 @@ function doGet(e) {
   var callback = params.callback || '';
   var result;
 
-  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true };
+  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true, findTeeTimeAvailability: true };
   if (GUARDED[action] && !passcodeOk_(params)) {
     result = ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized: invalid organizer passcode'}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -46,6 +46,8 @@ function doGet(e) {
     result = checkPasscode(params);
   } else if (action === 'submitRSVP') {
     result = submitRSVP(params);
+  } else if (action === 'findTeeTimeAvailability') {
+    result = findTeeTimeAvailability(params);
   } else {
     result = ContentService.createTextOutput(JSON.stringify({error: 'Unknown action'}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -1848,4 +1850,237 @@ function savePlayer(params) {
     return ContentService.createTextOutput(JSON.stringify({error: e.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Tee-time availability finder (Phase 1: read-only reporter, no booking).
+// Given a date, earliest start time, and a required number of consecutive
+// open tee times, checks each course's live tee sheet (Courses col M =
+// Online Booking URL) and reports which ones can host the group.
+// ---------------------------------------------------------------------------
+
+function findTeeTimeAvailability(params) {
+  try {
+    var date = (params.date || '').toString().trim();          // yyyy-MM-dd
+    var earliestTime = (params.earliestTime || '00:00').toString().trim(); // HH:MM 24h
+    var minConsecutive = parseInt(params.minConsecutive) || 5;
+    var playersPerSlot = 4;
+
+    if (!date) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Date is required'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var earliestMinutes = timeStrToMinutes_(earliestTime);
+    var coursesSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Courses');
+    var coursesData = coursesSheet.getDataRange().getValues();
+
+    var results = [];
+    for (var i = 1; i < coursesData.length; i++) {
+      var row = coursesData[i];
+      var courseName = (row[0] || '').toString().trim();
+      if (!courseName) continue;
+
+      var bookingUrl = (row[12] || '').toString().trim();   // col M
+      var interval = parseInt(row[10]) || 9;                // col K
+
+      if (!bookingUrl) {
+        results.push({ course: courseName, status: 'manual' });
+        continue;
+      }
+
+      var platform = getPlatformInfo_(bookingUrl);
+      if (!platform) {
+        results.push({ course: courseName, status: 'manual', bookingUrl: bookingUrl });
+        continue;
+      }
+
+      try {
+        var slots;
+        if (platform.type === 'foreup') {
+          slots = fetchForeUpTimes_(platform.host, platform.scheduleId, formatDateForForeUp_(date));
+        } else if (platform.type === 'golfrev') {
+          slots = fetchGolfRevTimes_(platform.courseid, platform.htc, formatDateForGolfRev_(date));
+        } else if (platform.type === 'chronogolf') {
+          slots = fetchChronogolfTimes_(platform.clubId, date, playersPerSlot);
+        } else {
+          slots = null;
+        }
+
+        if (!slots) {
+          results.push({ course: courseName, status: 'manual', bookingUrl: bookingUrl });
+          continue;
+        }
+
+        var window = findConsecutiveWindow_(slots, interval, playersPerSlot, minConsecutive, earliestMinutes);
+        if (window) {
+          results.push({
+            course: courseName,
+            status: 'available',
+            firstTime: window[0].time,
+            count: window.length,
+            bookingUrl: bookingUrl
+          });
+        } else {
+          results.push({ course: courseName, status: 'none', bookingUrl: bookingUrl });
+        }
+      } catch (courseErr) {
+        results.push({ course: courseName, status: 'error', bookingUrl: bookingUrl, error: courseErr.message });
+      }
+    }
+
+    var order = { available: 0, none: 1, manual: 2, error: 3 };
+    results.sort(function(a, b) { return order[a.status] - order[b.status]; });
+
+    return ContentService.createTextOutput(JSON.stringify({ results: results }))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch (e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// Detects the booking platform from an Online Booking URL and pulls out the
+// IDs each platform's API needs. Returns null for unsupported platforms.
+function getPlatformInfo_(bookingUrl) {
+  var m = bookingUrl.match(/\/\/([^\/]+)\/.*\/booking\/(\d+)\/(\d+)/);
+  if (m) {
+    return { type: 'foreup', host: m[1], scheduleId: m[3] };
+  }
+
+  if (bookingUrl.indexOf('golfrev.com') !== -1) {
+    var q = parseQueryParams_(bookingUrl);
+    if (q.htc && q.courseid) {
+      return { type: 'golfrev', htc: q.htc, courseid: q.courseid };
+    }
+  }
+
+  m = bookingUrl.match(/chronogolf\.com\/club\/(\d+)/);
+  if (m) {
+    return { type: 'chronogolf', clubId: m[1] };
+  }
+
+  return null;
+}
+
+function parseQueryParams_(url) {
+  var params = {};
+  var qIndex = url.indexOf('?');
+  if (qIndex === -1) return params;
+  var qs = url.substring(qIndex + 1).split('#')[0];
+  qs.split('&').forEach(function(pair) {
+    if (!pair) return;
+    var kv = pair.split('=');
+    var key = decodeURIComponent(kv[0] || '');
+    if (key) params[key] = decodeURIComponent((kv[1] || '').replace(/\+/g, ' '));
+  });
+  return params;
+}
+
+function formatDateForForeUp_(isoDate) {
+  var parts = isoDate.split('-');            // yyyy-MM-dd
+  return parts[1] + '-' + parts[2] + '-' + parts[0];  // MM-DD-yyyy
+}
+
+function formatDateForGolfRev_(isoDate) {
+  var parts = isoDate.split('-');
+  return parts[1] + '/' + parts[2] + '/' + parts[0];  // MM/dd/yyyy
+}
+
+function timeStrToMinutes_(hhmm) {
+  var parts = hhmm.split(':');
+  var h = parseInt(parts[0]) || 0;
+  var m = parseInt(parts[1]) || 0;
+  return h * 60 + m;
+}
+
+// foreUp public JSON API - returns only slots that still have room.
+function fetchForeUpTimes_(host, scheduleId, dateStr) {
+  var url = 'https://' + host + '/index.php/api/booking/times?time=all&date=' + encodeURIComponent(dateStr) +
+    '&holes=all&players=0&booking_class=&schedule_id=' + scheduleId +
+    '&schedule_ids%5B%5D=' + scheduleId + '&specials_only=0&api_key=no_external_api_key';
+  var resp = UrlFetchApp.fetch(url, {
+    muteHttpExceptions: true,
+    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+  });
+  var data = JSON.parse(resp.getContentText());
+  if (!data || !data.length) return [];
+
+  return data.map(function(slot) {
+    var timePart = (slot.time || '').split(' ')[1] || '';   // "yyyy-MM-dd HH:mm" -> "HH:mm"
+    return { time: timePart, availableSpots: parseInt(slot.available_spots) || 0 };
+  }).filter(function(s) { return s.time; });
+}
+
+// GolfRev HTML fragment endpoint - one card per bookable slot.
+function fetchGolfRevTimes_(courseid, htc, dateStr) {
+  var url = 'https://www.golfrev.com/go/tee_times/teetime_table_html.asp?c=' + courseid +
+    '&s=' + encodeURIComponent(dateStr) + '&h=' + htc + '&specials=&reset=yes&snapshot=no';
+  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+  var html = resp.getContentText();
+
+  var slots = [];
+  var re = /showBooking\('([^']+)',(\d+),(\d+),(\d+),(\d+),/g;
+  var match;
+  while ((match = re.exec(html))) {
+    var hour = parseInt(match[3]);
+    var minute = parseInt(match[4]);
+    var players = parseInt(match[5]);
+    var time = (hour < 10 ? '0' + hour : '' + hour) + ':' + (minute < 10 ? '0' + minute : '' + minute);
+    slots.push({ time: time, availableSpots: players });
+  }
+  return slots;
+}
+
+// Chronogolf JSON API. Course id + affiliation type id aren't in the booking
+// URL, so this scrapes the club page's embedded __NEXT_DATA__ once per call
+// to find them, then queries the teetimes endpoint for the requested date.
+function fetchChronogolfTimes_(clubId, isoDate, players) {
+  var pageResp = UrlFetchApp.fetch('https://www.chronogolf.com/club/' + clubId, { muteHttpExceptions: true });
+  var html = pageResp.getContentText();
+  var m = html.match(/__NEXT_DATA__[^>]*>([\s\S]*?)<\/script>/);
+  if (!m) return [];
+
+  var nextData = JSON.parse(m[1]);
+  var club = nextData.props && nextData.props.pageProps && nextData.props.pageProps.club;
+  if (!club || !club.courses || !club.courses.length) return [];
+
+  var courseId = club.courses[0].id;
+  var affiliationTypeId = club.defaultAffiliationTypeId;
+
+  var url = 'https://www.chronogolf.com/marketplace/clubs/' + clubId + '/teetimes?date=' +
+    encodeURIComponent(isoDate) + '&course_id=' + courseId + '&nb_holes=18&nb_players=' + players +
+    '&affiliation_type_ids%5B%5D=' + affiliationTypeId;
+  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, headers: { 'Accept': 'application/json' } });
+  var data = JSON.parse(resp.getContentText());
+  if (!data || !data.length) return [];
+
+  return data
+    .filter(function(slot) { return slot.out_of_capacity === false; })
+    .map(function(slot) { return { time: slot.start_time, availableSpots: players }; });
+}
+
+// Finds the earliest run of `minCount` tee times, each with room for
+// `playersNeeded`, spaced exactly `intervalMinutes` apart (i.e. genuinely
+// back-to-back on the tee sheet, not just N open times somewhere in the day -
+// these APIs only return slots with room, so a gap bigger than the interval
+// means a fully-booked time sits between them).
+function findConsecutiveWindow_(slots, intervalMinutes, playersNeeded, minCount, earliestMinutes) {
+  var qualifying = slots
+    .filter(function(s) {
+      return s.availableSpots >= playersNeeded && timeStrToMinutes_(s.time) >= earliestMinutes;
+    })
+    .sort(function(a, b) { return timeStrToMinutes_(a.time) - timeStrToMinutes_(b.time); });
+
+  var run = [];
+  for (var i = 0; i < qualifying.length; i++) {
+    if (run.length === 0) {
+      run = [qualifying[i]];
+    } else {
+      var gap = timeStrToMinutes_(qualifying[i].time) - timeStrToMinutes_(run[run.length - 1].time);
+      run = (gap === intervalMinutes) ? run.concat([qualifying[i]]) : [qualifying[i]];
+    }
+    if (run.length >= minCount) return run.slice(0, minCount);
+  }
+  return null;
 }
