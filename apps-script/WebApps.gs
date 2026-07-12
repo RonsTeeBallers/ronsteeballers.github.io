@@ -118,6 +118,22 @@ function findEventRow_(eventId) {
   return null;
 }
 
+// Latest Form Responses row per player for one event, decided by the Timestamp
+// in column A - so re-sorting the Form Responses tab can never change which
+// response wins. Ties or missing timestamps fall back to "later row wins",
+// matching the old behavior on an append-ordered sheet.
+function latestRowsByPlayer_(formData, eventId) {
+  var map = {};  // "Last, First" -> { ts: millis, row: [...] }
+  for (var i = 1; i < formData.length; i++) {
+    var name = formData[i][1] ? formData[i][1].toString().trim() : '';
+    if (!name) continue;
+    if (eventDateStr_(formData[i][6]).replace('EVT-', '') !== eventId) continue;
+    var ts = (formData[i][0] instanceof Date) ? formData[i][0].getTime() : 0;
+    if (!map[name] || ts >= map[name].ts) map[name] = { ts: ts, row: formData[i] };
+  }
+  return map;
+}
+
 function getEventData(eventId, playerSlug) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -233,21 +249,15 @@ function getOpenEvents() {
       var slotsReserved = parseInt(eventsData[i][3]) || 0;
       var totalSlots = slotsReserved * 4;
 
-      // Count confirmed players for this specific event
-      var responseMap = {};
-      for (var k = 1; k < formData.length; k++) {
-        var name = formData[k][1].toString().trim();
-        var response = formData[k][2].toString().trim();
-        if (name === '') continue;
-        if (eventDateStr_(formData[k][6]) === dateStr) {
-          responseMap[name] = { response: response, guest: formData[k][7] ? formData[k][7].toString().trim() : '' };
-        }
-      }
+      // Count confirmed players for this specific event, latest response per
+      // player by Timestamp (sort-order independent)
+      var responseMap = latestRowsByPlayer_(formData, dateStr);
       var confirmed = 0;
       for (var name in responseMap) {
-        if (responseMap[name].response === 'Yes') {
+        var rrow = responseMap[name].row;
+        if (rrow[2].toString().trim() === 'Yes') {
           confirmed++;
-          if (responseMap[name].guest) confirmed++;
+          if (rrow[7] && rrow[7].toString().trim()) confirmed++;
         }
       }
 
@@ -341,21 +351,18 @@ function getConfirmedPlayers(eventId) {
     var slotsReserved = found ? (parseInt(found.row[3]) || 0) * 4 : 0;
 
     var formData = formSheet.getDataRange().getValues();
-    var responseMap = {};
 
-    for (var i = 1; i < formData.length; i++) {
-      var name = formData[i][1].toString().trim();
-      var response = formData[i][2].toString().trim();
-      var walkRide = formData[i][3].toString().trim();
-      if (name === '') continue;
-      if (eventDateStr_(formData[i][6]).replace('EVT-', '') === eventId) {
-        responseMap[name] = {
-          playing: response,
-          walkRide: walkRide || 'No preference',
-          scoring: formData[i][4] ? formData[i][4].toString().trim() : 'No Preference',
-          guest: formData[i][7] ? formData[i][7].toString().trim() : ''
-        };
-      }
+    // Latest response per player by Timestamp (sort-order independent)
+    var latest = latestRowsByPlayer_(formData, eventId);
+    var responseMap = {};
+    for (var name in latest) {
+      var lrow = latest[name].row;
+      responseMap[name] = {
+        playing: lrow[2].toString().trim(),
+        walkRide: lrow[3].toString().trim() || 'No preference',
+        scoring: lrow[4] ? lrow[4].toString().trim() : 'No Preference',
+        guest: lrow[7] ? lrow[7].toString().trim() : ''
+      };
     }
 
     // RSVP comments intentionally stay in the spreadsheet only - the organizer
@@ -1102,15 +1109,17 @@ function getStats() {
       var fHead = formData[0].join(' ').toLowerCase();
       if (fHead.indexOf('timestamp') !== -1 || fHead.indexOf('name') !== -1 || fHead.indexOf('walk') !== -1) fStart = 1;
     }
-    var wrLast = {};   // (nameKey|eventId) -> walkRide value (last wins)
+    // Dedup by Timestamp per (player, event) BEFORE filtering to Yes, so a
+    // Yes changed to a No drops out and sheet sort order never matters.
+    var wrLast = {};   // (nameKey|eventId) -> { ts, playing, wr } (latest by Timestamp)
     var wrName = {};   // nameKey -> display
     for (var f = fStart; f < formData.length; f++) {
       var frow = formData[f];
       var rawName = (frow[1] || '').toString().trim();
-      var playing = (frow[2] || '').toString().trim();
+      var playing = (frow[2] || '').toString().trim().toLowerCase();
       var wrVal = (frow[3] || '').toString().trim();
       var ev = (frow[6] || '').toString().trim();
-      if (rawName === '' || playing.toLowerCase() !== 'yes') continue;
+      if (rawName === '') continue;
       var disp2 = rawName;
       if (rawName.indexOf(',') !== -1) {
         var parts2 = rawName.split(',');
@@ -1118,13 +1127,18 @@ function getStats() {
       }
       var nk = disp2.toLowerCase();
       wrName[nk] = disp2;
-      wrLast[nk + '|' + ev] = wrVal.toLowerCase();
+      var wrKey = nk + '|' + ev;
+      var fts = (frow[0] instanceof Date) ? frow[0].getTime() : 0;
+      if (!wrLast[wrKey] || fts >= wrLast[wrKey].ts) {
+        wrLast[wrKey] = { ts: fts, playing: playing, wr: wrVal.toLowerCase() };
+      }
     }
     var wrTally = {};
     Object.keys(wrLast).forEach(function(key) {
+      if (wrLast[key].playing !== 'yes') return;
       var nk = key.substring(0, key.lastIndexOf('|'));
       if (!wrTally[nk]) wrTally[nk] = { walk: 0, ride: 0, either: 0 };
-      var v = wrLast[key];
+      var v = wrLast[key].wr;
       if (v === 'walk') wrTally[nk].walk++;
       else if (v === 'ride') wrTally[nk].ride++;
       else wrTally[nk].either++;
@@ -1292,12 +1306,11 @@ function escapeHtml_(s) {
 function getResponseStatusMap_(eventId) {
   var formSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form Responses');
   var formData = formSheet.getDataRange().getValues();
+  var latest = latestRowsByPlayer_(formData, eventId);
   var status = {};
-  for (var i = 1; i < formData.length; i++) {
-    var nm = formData[i][1] ? formData[i][1].toString().trim().toLowerCase() : '';
-    if (!nm) continue;
-    var rowEventId = eventDateStr_(formData[i][6]).replace('EVT-', '');  // col G Event ID
-    if (rowEventId === eventId) status[nm] = formData[i][2] ? formData[i][2].toString().trim() : '';
+  for (var name in latest) {
+    var srow = latest[name].row;
+    status[name.toLowerCase()] = srow[2] ? srow[2].toString().trim() : '';
   }
   return status;
 }
@@ -1324,24 +1337,16 @@ function computeRemindExcludeSet_(statusMap, audience) {
 function getSignedUpNames_(eventId) {
   var formSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form Responses');
   var formData = formSheet.getDataRange().getValues();
-  var responseMap = {};
-  for (var i = 1; i < formData.length; i++) {
-    var lastFirst = formData[i][1] ? formData[i][1].toString().trim() : '';
-    if (!lastFirst) continue;
-    var rowEventId = eventDateStr_(formData[i][6]).replace('EVT-', '');  // col G Event ID
-    if (rowEventId !== eventId) continue;
-    responseMap[lastFirst] = {
-      playing: formData[i][2] ? formData[i][2].toString().trim() : '',
-      guest: formData[i][7] ? formData[i][7].toString().trim() : ''
-    };
-  }
+  var latest = latestRowsByPlayer_(formData, eventId);
 
   var names = [];
-  for (var lastFirst in responseMap) {
-    if (responseMap[lastFirst].playing !== 'Yes') continue;
+  for (var lastFirst in latest) {
+    var nrow = latest[lastFirst].row;
+    if ((nrow[2] ? nrow[2].toString().trim() : '') !== 'Yes') continue;
     var parts = lastFirst.split(',');
     names.push(parts.length > 1 ? parts[1].trim() + ' ' + parts[0].trim() : lastFirst);
-    if (responseMap[lastFirst].guest) names.push(responseMap[lastFirst].guest);
+    var guest = nrow[7] ? nrow[7].toString().trim() : '';
+    if (guest) names.push(guest);
   }
   names.sort(function(a, b) { return a.localeCompare(b); });
   return names;
