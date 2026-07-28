@@ -4,7 +4,7 @@ function doGet(e) {
   var callback = params.callback || '';
   var result;
 
-  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true, findTeeTimeAvailability: true };
+  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, savePairingDraft: true, getPairingDraft: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true, findTeeTimeAvailability: true };
   if (GUARDED[action] && !passcodeOk_(params)) {
     result = ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized: invalid organizer passcode'}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -28,6 +28,10 @@ function doGet(e) {
     result = createEvent(params);
   } else if (action === 'savePairings') {
     result = savePairings(params);
+  } else if (action === 'savePairingDraft') {
+    result = savePairingDraft(params);
+  } else if (action === 'getPairingDraft') {
+    result = getPairingDraft(params);
   } else if (action === 'previewPairings') {
     result = previewPairings(params);
   } else if (action === 'getEventInfo') {
@@ -414,6 +418,48 @@ function getConfirmedPlayers(eventId) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
+// Draft pairings: save a work-in-progress grouping without sending anything.
+// Stored per-event in Script Properties (key PAIRING_DRAFT_<eventId>) so either
+// organizer, on any device, can resume later. Partial groupings are fine - the
+// pairing page re-matches names against the current confirmed list on load.
+// savePairings deletes the draft once the real send goes out.
+function savePairingDraft(params) {
+  try {
+    var eventId = (params.eventId || '').toString().trim();
+    if (!eventId) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Missing event ID'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    var draft = {
+      foursomes: params.foursomes || '',
+      comment: params.comment || '',
+      savedAt: new Date().toISOString()
+    };
+    PropertiesService.getScriptProperties()
+      .setProperty('PAIRING_DRAFT_' + eventId, JSON.stringify(draft));
+    return ContentService.createTextOutput(JSON.stringify({success: true, savedAt: draft.savedAt}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function getPairingDraft(params) {
+  try {
+    var eventId = (params.eventId || '').toString().trim();
+    var raw = eventId
+      ? PropertiesService.getScriptProperties().getProperty('PAIRING_DRAFT_' + eventId)
+      : null;
+    var draft = raw ? JSON.parse(raw) : null;
+    return ContentService.createTextOutput(JSON.stringify({draft: draft}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 function savePairings(params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -576,8 +622,10 @@ function savePairings(params) {
       historySheet.appendRow(historyRow);
     });
 
-    // Close the event now that the pairings are out.
+    // Close the event now that the pairings are out. The send supersedes any
+    // saved draft, so drop it too.
     eventsSheet.getRange(found.rowIndex, 6).setValue('Closed');
+    PropertiesService.getScriptProperties().deleteProperty('PAIRING_DRAFT_' + eventId);
 
     return ContentService.createTextOutput(JSON.stringify({
       success: true,

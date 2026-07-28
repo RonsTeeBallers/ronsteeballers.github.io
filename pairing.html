@@ -61,6 +61,8 @@
       transition: all 0.15s;
     }
     .btn-add { background: #eaf2ff; color: #1a5276; }
+    .btn-draft { background: #fef9e7; color: #d68910; }
+    .btn-draft:disabled { background: #f2f3f4; color: #aab7c4; cursor: not-allowed; }
     .btn-send { background: #1e8449; color: white; }
     .btn-send:disabled { background: #aab7c4; cursor: not-allowed; }
     .btn-dash { background: #f2f3f4; color: #5d6d7e; }
@@ -252,6 +254,7 @@
 
   <div class="toolbar">
     <button class="toolbar-btn btn-add" onclick="addFoursome()">+ Foursome</button>
+    <button class="toolbar-btn btn-draft" id="btn-draft" onclick="saveDraft()">Save Draft</button>
     <button class="toolbar-btn btn-send" id="btn-send" disabled onclick="sendPairings()">Send Pairings</button>
     <button class="toolbar-btn btn-dash" onclick="window.location.href='organizer.html'">Dashboard</button>
   </div>
@@ -546,16 +549,44 @@ function onDropPool(e) {
 
 var pendingFoursomes = '';
 
+// Same "Name|WR,Name|WR;..." format savePairings expects. Used for both the
+// real send and draft saves (drafts may have empty or partial foursomes).
+function serializeGroups() {
+  return groups.map(function(grp) {
+    return grp.map(function(p) {
+      return p.name + '|' + p.walkRide;
+    }).join(',');
+  }).join(';');
+}
+
+// Save the current groupings as a draft - nothing is emailed and the event
+// stays open. The draft lives on the server, so it can be resumed later from
+// any device by either organizer.
+function saveDraft() {
+  var btn = document.getElementById('btn-draft');
+  btn.disabled = true;
+  btn.textContent = 'Saving...';
+  jsonp('savePairingDraft', {
+    eventId: eventId,
+    foursomes: serializeGroups(),
+    comment: document.getElementById('pairing-comment').value
+  }, function(data) {
+    btn.disabled = false;
+    btn.textContent = 'Save Draft';
+    if (data && data.success) {
+      toast('Draft saved - no emails sent. Come back anytime to finish.');
+    } else {
+      toast('Could not save draft: ' + ((data && data.error) || 'unknown error'));
+    }
+  });
+}
+
 // Opens the preview modal (no email is sent until the organizer confirms).
 function sendPairings() {
   var unassigned = players.filter(function(p){ return !p.assigned; });
   if (unassigned.length > 0) { toast('All players must be assigned first'); return; }
 
-  pendingFoursomes = groups.map(function(grp) {
-    return grp.map(function(p) {
-      return p.name + '|' + p.walkRide;
-    }).join(',');
-  }).join(';');
+  pendingFoursomes = serializeGroups();
 
   document.getElementById('pairing-modal-details').textContent =
     document.getElementById('hdr-venue').textContent + ' — ' + document.getElementById('hdr-date').textContent;
@@ -655,12 +686,56 @@ function init() {
       };
     });
 
-    var n = Math.ceil(players.length / 4);
-    for (var i = 0; i < n; i++) groups.push([]);
+    // Before building default groups, check for a saved draft and restore it.
+    // Names are re-matched against the CURRENT confirmed list: anyone who
+    // un-RSVPed since the draft is dropped, and new confirmations show up in
+    // the unassigned pool. Current walk/ride prefs win over the drafted ones.
+    jsonp('getPairingDraft', {eventId: eventId}, function(dd) {
+      var draft = dd && dd.draft;
+      var restored = 0;
+      var dropped = [];
 
-    document.getElementById('spinner-wrap').style.display = 'none';
-    document.getElementById('main-ui').style.display = 'block';
-    render();
+      if (draft && draft.foursomes) {
+        draft.foursomes.split(';').forEach(function(fsStr) {
+          var grp = [];
+          if (fsStr) {
+            fsStr.split(',').forEach(function(playerStr) {
+              var name = playerStr.split('|')[0];
+              if (!name) return;
+              var p = findPlayer(name);
+              if (p && !p.assigned) {
+                p.assigned = true;
+                grp.push(p);
+                restored++;
+              } else if (!p) {
+                dropped.push(name);
+              }
+            });
+          }
+          groups.push(grp);
+        });
+        if (draft.comment) document.getElementById('pairing-comment').value = draft.comment;
+      }
+
+      // Make sure there is a slot for everyone (covers the no-draft case and
+      // players who RSVPed after the draft was saved).
+      while (groups.length * 4 < players.length) groups.push([]);
+      if (groups.length === 0) groups.push([]);
+
+      document.getElementById('spinner-wrap').style.display = 'none';
+      document.getElementById('main-ui').style.display = 'block';
+      render();
+
+      if (restored > 0) {
+        var when = draft.savedAt ? ' from ' + new Date(draft.savedAt).toLocaleDateString() : '';
+        toast('Draft restored' + when + ' - ' + restored + ' player' + (restored === 1 ? '' : 's') + ' placed');
+      }
+      if (dropped.length > 0) {
+        setTimeout(function() {
+          toast('No longer confirmed, removed from draft: ' + dropped.join(', '));
+        }, 2800);
+      }
+    });
   });
 }
 
