@@ -131,7 +131,7 @@ function latestRowsByPlayer_(formData, eventId) {
   for (var i = 1; i < formData.length; i++) {
     var name = formData[i][1] ? formData[i][1].toString().trim() : '';
     if (!name) continue;
-    if (eventDateStr_(formData[i][6]).replace('EVT-', '') !== eventId) continue;
+    if (eventDateStr_(formData[i][7]).replace('EVT-', '') !== eventId) continue;
     var ts = (formData[i][0] instanceof Date) ? formData[i][0].getTime() : 0;
     if (!map[name] || ts >= map[name].ts) map[name] = { ts: ts, row: formData[i] };
   }
@@ -259,9 +259,9 @@ function getOpenEvents() {
       var confirmed = 0;
       for (var name in responseMap) {
         var rrow = responseMap[name].row;
-        if (rrow[2].toString().trim() === 'Yes') {
+        if (rrow[3].toString().trim() === 'Yes') {
           confirmed++;
-          if (rrow[7] && rrow[7].toString().trim()) confirmed++;
+          if (rrow[8] && rrow[8].toString().trim()) confirmed++;
         }
       }
 
@@ -362,10 +362,10 @@ function getConfirmedPlayers(eventId) {
     for (var name in latest) {
       var lrow = latest[name].row;
       responseMap[name] = {
-        playing: lrow[2].toString().trim(),
-        walkRide: lrow[3].toString().trim() || 'No preference',
-        scoring: lrow[4] ? lrow[4].toString().trim() : 'No Preference',
-        guest: lrow[7] ? lrow[7].toString().trim() : ''
+        playing: lrow[3].toString().trim(),
+        walkRide: lrow[4].toString().trim() || 'No preference',
+        scoring: lrow[5] ? lrow[5].toString().trim() : 'No Preference',
+        guest: lrow[8] ? lrow[8].toString().trim() : ''
       };
     }
 
@@ -1164,9 +1164,9 @@ function getStats() {
     for (var f = fStart; f < formData.length; f++) {
       var frow = formData[f];
       var rawName = (frow[1] || '').toString().trim();
-      var playing = (frow[2] || '').toString().trim().toLowerCase();
-      var wrVal = (frow[3] || '').toString().trim();
-      var ev = (frow[6] || '').toString().trim();
+      var playing = (frow[3] || '').toString().trim().toLowerCase();
+      var wrVal = (frow[4] || '').toString().trim();
+      var ev = (frow[7] || '').toString().trim();
       if (rawName === '') continue;
       var disp2 = rawName;
       if (rawName.indexOf(',') !== -1) {
@@ -1358,7 +1358,7 @@ function getResponseStatusMap_(eventId) {
   var status = {};
   for (var name in latest) {
     var srow = latest[name].row;
-    status[name.toLowerCase()] = srow[2] ? srow[2].toString().trim() : '';
+    status[name.toLowerCase()] = srow[3] ? srow[3].toString().trim() : '';
   }
   return status;
 }
@@ -1390,10 +1390,10 @@ function getSignedUpNames_(eventId) {
   var names = [];
   for (var lastFirst in latest) {
     var nrow = latest[lastFirst].row;
-    if ((nrow[2] ? nrow[2].toString().trim() : '') !== 'Yes') continue;
+    if ((nrow[3] ? nrow[3].toString().trim() : '') !== 'Yes') continue;
     var parts = lastFirst.split(',');
     names.push(parts.length > 1 ? parts[1].trim() + ' ' + parts[0].trim() : lastFirst);
-    var guest = nrow[7] ? nrow[7].toString().trim() : '';
+    var guest = nrow[8] ? nrow[8].toString().trim() : '';
     if (guest) names.push(guest);
   }
   names.sort(function(a, b) { return a.localeCompare(b); });
@@ -1619,11 +1619,23 @@ function submitRSVP(params) {
 
 // Shared by submitRSVP (player-submitted, playerName trusted from the RSVP link)
 // and organizerSubmitRSVP (organizer-submitted, playerName resolved server-side
-// from the Players tab). Writes one Form Responses row.
+// from the Players tab). Writes one Form Responses row (A Timestamp, B Name,
+// C Email, D Playing, E Walk/Ride, F Scoring, G Comments, H EventId, I Guest).
 function writeRsvpRow_(playerName, params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var formSheet = ss.getSheetByName('Form Responses');
+    var playersData = ss.getSheetByName('Players').getDataRange().getValues();
+
+    // The player's email (Players col D) rides along in col C so the organizer
+    // can email an individual respondent straight from the sheet.
+    var playerEmail = '';
+    for (var p = 1; p < playersData.length; p++) {
+      if (playersData[p][0].toString().trim().toLowerCase() === (playerName || '').toLowerCase()) {
+        playerEmail = playersData[p][3] ? playersData[p][3].toString().trim() : '';
+        break;
+      }
+    }
 
     // Strip the pairing-payload delimiters (| ; ,) from guest names - a guest
     // named with one of them would corrupt the foursomes string sent by the
@@ -1635,7 +1647,6 @@ function writeRsvpRow_(playerName, params) {
 
     // A guest must be a true guest, not an existing active player
     if (playingYes && guestName) {
-      var playersData = ss.getSheetByName('Players').getDataRange().getValues();
       var guestKey = guestName.toLowerCase();
       for (var i = 1; i < playersData.length; i++) {
         if ((playersData[i][4] || '').toString().trim().toLowerCase() !== 'yes') continue;
@@ -1653,6 +1664,7 @@ function writeRsvpRow_(playerName, params) {
     var row = [
       timestamp,
       playerName || '',
+      playerEmail,
       params.playing || '',
       params.walkRide || '',
       params.scoring || '',
@@ -1664,8 +1676,8 @@ function writeRsvpRow_(playerName, params) {
     var nextRow = formSheet.getLastRow() + 1;
     var numCols = row.length;
     formSheet.getRange(nextRow, 1, 1, numCols).setValues([row]);
-    formSheet.getRange(nextRow, 7).setNumberFormat('@STRING@');
-    formSheet.getRange(nextRow, 7).setValue(params.eventId || '');
+    formSheet.getRange(nextRow, 8).setNumberFormat('@STRING@');
+    formSheet.getRange(nextRow, 8).setValue(params.eventId || '');
 
     return ContentService.createTextOutput(JSON.stringify({success: true}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -1674,6 +1686,35 @@ function writeRsvpRow_(playerName, params) {
     return ContentService.createTextOutput(JSON.stringify({error: e.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
+}
+
+// One-time backfill: fill the new Email column C for existing Form Responses
+// rows by matching col B against the Players tab. Run manually from the editor
+// after inserting the column; rows whose name no longer matches are left blank.
+function backfillRsvpEmails() {
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var formSheet = ss.getSheetByName('Form Responses');
+  var formData = formSheet.getDataRange().getValues();
+  var playersData = ss.getSheetByName('Players').getDataRange().getValues();
+
+  var emailByName = {};
+  for (var p = 1; p < playersData.length; p++) {
+    var key = playersData[p][0].toString().trim().toLowerCase();
+    var email = playersData[p][3] ? playersData[p][3].toString().trim() : '';
+    if (key && email) emailByName[key] = email;
+  }
+
+  var filled = 0;
+  for (var i = 1; i < formData.length; i++) {
+    if (formData[i][2] && formData[i][2].toString().trim()) continue;  // already has one
+    var name = formData[i][1] ? formData[i][1].toString().trim().toLowerCase() : '';
+    var match = name && emailByName[name];
+    if (match) {
+      formSheet.getRange(i + 1, 3).setValue(match);
+      filled++;
+    }
+  }
+  Logger.log('Backfilled ' + filled + ' email(s)');
 }
 
 // Look up a player in the Players tab by their RSVP-link slug (same slug algorithm
