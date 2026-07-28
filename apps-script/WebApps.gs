@@ -484,6 +484,40 @@ function closeEvent(params) {
   }
 }
 
+// Nightly safety net: close any Open event whose date has passed, since
+// sending pairings no longer closes events and forgetting is easy. Runs the
+// morning AFTER the event date (golf-day changes stay possible), via the
+// time-driven trigger installed by installAutoCloseTrigger(). Also clears the
+// event's pairing draft, like a manual close.
+function autoCloseEvents() {
+  var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Events');
+  var data = sheet.getDataRange().getValues();
+  var today = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'yyyy-MM-dd');
+  var props = PropertiesService.getScriptProperties();
+  var closed = [];
+  for (var i = 1; i < data.length; i++) {
+    var status = data[i][5] ? data[i][5].toString().trim() : '';
+    var dateStr = eventDateStr_(data[i][0]);
+    if (status === 'Open' && dateStr && dateStr < today) {
+      sheet.getRange(i + 1, 6).setValue('Closed');
+      props.deleteProperty('PAIRING_DRAFT_' + dateStr);
+      closed.push(dateStr);
+    }
+  }
+  Logger.log('autoCloseEvents: closed ' + closed.length + ' past event(s)' +
+    (closed.length ? ' - ' + closed.join(', ') : ''));
+}
+
+// One-time setup: run this from the Apps Script editor to install the nightly
+// auto-close trigger (~3am). Safe to re-run - it replaces any existing one.
+function installAutoCloseTrigger() {
+  ScriptApp.getProjectTriggers().forEach(function(t) {
+    if (t.getHandlerFunction() === 'autoCloseEvents') ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('autoCloseEvents').timeBased().everyDays(1).atHour(3).create();
+  Logger.log('Nightly auto-close trigger installed (runs about 3am).');
+}
+
 function savePairings(params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
