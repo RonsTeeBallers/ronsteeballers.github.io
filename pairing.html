@@ -65,6 +65,8 @@
     .btn-draft:disabled { background: #f2f3f4; color: #aab7c4; cursor: not-allowed; }
     .btn-send { background: #1e8449; color: white; }
     .btn-send:disabled { background: #aab7c4; cursor: not-allowed; }
+    .btn-close { background: #fdedec; color: #922b21; }
+    .btn-close:disabled { background: #f2f3f4; color: #aab7c4; cursor: not-allowed; }
     .btn-dash { background: #f2f3f4; color: #5d6d7e; }
     .layout {
       display: flex;
@@ -256,6 +258,7 @@
     <button class="toolbar-btn btn-add" onclick="addFoursome()">+ Foursome</button>
     <button class="toolbar-btn btn-draft" id="btn-draft" onclick="saveDraft()">Save Draft</button>
     <button class="toolbar-btn btn-send" id="btn-send" disabled onclick="sendPairings()">Send Pairings</button>
+    <button class="toolbar-btn btn-close" id="btn-close" onclick="closeEvent()">Close Event</button>
     <button class="toolbar-btn btn-dash" onclick="window.location.href='organizer.html'">Dashboard</button>
   </div>
 
@@ -581,6 +584,25 @@ function saveDraft() {
   });
 }
 
+// Close the event: no more RSVPs or changes. Separate from sending - the
+// organizer can send pairings and leave the event open for late adds/drops.
+function closeEvent() {
+  if (!window.confirm('Close this event? Players will no longer be able to RSVP or change their response, and the saved pairing draft will be cleared.')) return;
+  var btn = document.getElementById('btn-close');
+  btn.disabled = true;
+  btn.textContent = 'Closing...';
+  jsonp('closeEvent', {eventId: eventId}, function(data) {
+    if (data && data.success) {
+      toast('Event closed');
+      setTimeout(function() { window.location.href = 'organizer.html'; }, 1500);
+    } else {
+      btn.disabled = false;
+      btn.textContent = 'Close Event';
+      toast('Could not close event: ' + ((data && data.error) || 'unknown error'));
+    }
+  });
+}
+
 // Opens the preview modal (no email is sent until the organizer confirms).
 function sendPairings() {
   var unassigned = players.filter(function(p){ return !p.assigned; });
@@ -638,11 +660,9 @@ function confirmSendPairings() {
       var msg = 'Pairings sent to ' + (data.sent || 0) + ' player' + ((data.sent === 1) ? '' : 's') + '!';
       if (data.errors && data.errors.length) msg += ' (' + data.errors.length + ' failed)';
       if (data.unmatched && data.unmatched.length) msg += ' No email: ' + data.unmatched.join(', ');
+      msg += ' Event stays open - hit Close Event when ready.';
       hidePairingPreview();
       toast(msg);
-      setTimeout(function() {
-        window.location.href = 'organizer.html';
-      }, 3500);
     } else {
       document.getElementById('pairing-preview-status').textContent = 'Send error: ' + (data.error || 'Unknown error');
       btn.disabled = false;

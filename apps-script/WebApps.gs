@@ -4,7 +4,7 @@ function doGet(e) {
   var callback = params.callback || '';
   var result;
 
-  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, savePairingDraft: true, getPairingDraft: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true, findTeeTimeAvailability: true };
+  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, savePairingDraft: true, getPairingDraft: true, closeEvent: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true, findTeeTimeAvailability: true };
   if (GUARDED[action] && !passcodeOk_(params)) {
     result = ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized: invalid organizer passcode'}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -32,6 +32,8 @@ function doGet(e) {
     result = savePairingDraft(params);
   } else if (action === 'getPairingDraft') {
     result = getPairingDraft(params);
+  } else if (action === 'closeEvent') {
+    result = closeEvent(params);
   } else if (action === 'previewPairings') {
     result = previewPairings(params);
   } else if (action === 'getEventInfo') {
@@ -460,11 +462,32 @@ function getPairingDraft(params) {
   }
 }
 
+// Mark an event Closed (Events col F) and drop its working pairing draft.
+// Sending pairings no longer closes the event automatically - the organizer
+// decides when RSVP changes should stop.
+function closeEvent(params) {
+  try {
+    var eventId = (params.eventId || '').toString().trim();
+    var found = findEventRow_(eventId);
+    if (!found) {
+      return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Events')
+      .getRange(found.rowIndex, 6).setValue('Closed');
+    PropertiesService.getScriptProperties().deleteProperty('PAIRING_DRAFT_' + eventId);
+    return ContentService.createTextOutput(JSON.stringify({success: true}))
+      .setMimeType(ContentService.MimeType.JSON);
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
 function savePairings(params) {
   try {
     var ss = SpreadsheetApp.getActiveSpreadsheet();
     var draftSheet = ss.getSheetByName('Draft Pairings');
-    var eventsSheet = ss.getSheetByName('Events');
     var historySheet = ss.getSheetByName('Pairing History');
 
     // Parse foursomes from pipe-delimited string
@@ -622,10 +645,16 @@ function savePairings(params) {
       historySheet.appendRow(historyRow);
     });
 
-    // Close the event now that the pairings are out. The send supersedes any
-    // saved draft, so drop it too.
-    eventsSheet.getRange(found.rowIndex, 6).setValue('Closed');
-    PropertiesService.getScriptProperties().deleteProperty('PAIRING_DRAFT_' + eventId);
+    // The event intentionally stays OPEN after sending - last-minute adds and
+    // drops still happen. The organizer closes it explicitly via closeEvent
+    // (Close Event button on the pairing page). Keep the sent pairings as the
+    // working draft so reopening the pairing page restores them for
+    // adjustments and a resend; closeEvent clears the draft.
+    PropertiesService.getScriptProperties().setProperty('PAIRING_DRAFT_' + eventId, JSON.stringify({
+      foursomes: params.foursomes,
+      comment: params.comment || '',
+      savedAt: new Date().toISOString()
+    }));
 
     return ContentService.createTextOutput(JSON.stringify({
       success: true,
