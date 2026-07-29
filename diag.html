@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#1a5276">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⛳</text></svg>">
+  <title>Connection Test — RonsTeeBallers</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f0f4f8;
+      color: #1a2332;
+      min-height: 100vh;
+    }
+
+    .header {
+      background: #1a5276;
+      color: white;
+      padding: 20px 16px;
+      text-align: center;
+    }
+    .header .logo { font-size: 28px; margin-bottom: 4px; }
+    .header h1 { font-size: 20px; font-weight: 700; margin-bottom: 2px; }
+    .header p { font-size: 14px; opacity: 0.85; }
+
+    .card {
+      background: white;
+      margin: 16px;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .card h2 {
+      font-size: 17px;
+      color: #1a5276;
+      margin-bottom: 12px;
+      padding-bottom: 10px;
+      border-bottom: 2px solid #eaf2ff;
+    }
+
+    .test-row {
+      display: flex;
+      align-items: flex-start;
+      padding: 10px 0;
+      border-bottom: 1px solid #f0f4f8;
+      font-size: 15px;
+    }
+    .test-row:last-child { border-bottom: none; }
+    .test-row .status {
+      width: 34px;
+      flex-shrink: 0;
+      font-size: 18px;
+      line-height: 1.2;
+    }
+    .test-row .name { font-weight: 600; }
+    .test-row .detail { color: #5d6d7e; font-size: 13px; margin-top: 2px; }
+
+    #verdict {
+      display: none;
+      margin: 16px;
+      border-radius: 12px;
+      padding: 18px 20px;
+      font-size: 15px;
+      line-height: 1.5;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    #verdict.good { display: block; background: #e8f8ef; border: 2px solid #27ae60; }
+    #verdict.bad { display: block; background: #fdecea; border: 2px solid #c0392b; }
+    #verdict h2 { font-size: 17px; margin-bottom: 8px; }
+    #verdict.good h2 { color: #1e8449; }
+    #verdict.bad h2 { color: #c0392b; }
+
+    .env {
+      font-size: 12px;
+      color: #5d6d7e;
+      word-break: break-all;
+      line-height: 1.6;
+    }
+    .env b { color: #1a2332; }
+
+    .footer-note {
+      text-align: center;
+      font-size: 14px;
+      color: #5d6d7e;
+      margin: 20px 16px 32px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="header">
+    <div class="logo">&#9971;</div>
+    <h1>Connection Test</h1>
+    <p>Checks whether this phone can reach the RSVP server</p>
+  </div>
+
+  <div class="card">
+    <h2>Tests</h2>
+    <div class="test-row" id="row-page">
+      <div class="status" id="st-page">&#9203;</div>
+      <div><div class="name">1. Load this website</div>
+      <div class="detail" id="dt-page">Checking...</div></div>
+    </div>
+    <div class="test-row" id="row-gstatic">
+      <div class="status" id="st-gstatic">&#9203;</div>
+      <div><div class="name">2. Load a script from Google (gstatic.com)</div>
+      <div class="detail" id="dt-gstatic">Checking...</div></div>
+    </div>
+    <div class="test-row" id="row-exec">
+      <div class="status" id="st-exec">&#9203;</div>
+      <div><div class="name">3. Reach the RSVP server (script.google.com)</div>
+      <div class="detail" id="dt-exec">Checking... this one can take up to 20 seconds</div></div>
+    </div>
+  </div>
+
+  <div id="verdict"></div>
+
+  <div class="card">
+    <h2>Phone details</h2>
+    <div class="env" id="env"></div>
+  </div>
+
+  <div class="footer-note">
+    When the tests finish, please take a <b>screenshot of this whole page</b><br>and text it back. That's all you need to do.
+  </div>
+
+<script>
+  var BACKEND_URL = 'https://script.google.com/macros/s/AKfycbxTDDH0nhMzS4YycZImyXV6w_cZr9j1jrF4A9VwljttPzNVH1oE5Xgx3c_8QXveneWA/exec';
+
+  var results = { page: null, gstatic: null, exec: null };
+
+  function setResult(id, ok, detail) {
+    results[id] = ok;
+    document.getElementById('st-' + id).innerHTML = ok ? '&#9989;' : '&#10060;';
+    document.getElementById('dt-' + id).textContent = detail;
+    if (results.page !== null && results.gstatic !== null && results.exec !== null) {
+      showVerdict();
+    }
+  }
+
+  function showVerdict() {
+    var v = document.getElementById('verdict');
+    if (results.exec) {
+      v.className = 'good';
+      v.innerHTML = '<h2>&#9989; Everything works from this browser</h2>' +
+        'This phone can reach the RSVP server right now. If RSVP links from email still fail, ' +
+        'the email link is opening in a different app (an in-app browser) than the one showing this page.';
+    } else if (results.gstatic) {
+      v.className = 'bad';
+      v.innerHTML = '<h2>&#10060; script.google.com is blocked on this phone</h2>' +
+        'This phone loads regular websites and even other Google services fine, but requests to ' +
+        '<b>script.google.com</b> (which powers the RSVP form) are being blocked. ' +
+        'This is usually an ad&#8209;blocker, a security/antivirus app, Private&nbsp;DNS, a VPN, or the Wi&#8209;Fi network. ' +
+        'Try turning Wi&#8209;Fi off and re-running this test on cellular data.';
+    } else {
+      v.className = 'bad';
+      v.innerHTML = '<h2>&#10060; Outside scripts are blocked in this browser</h2>' +
+        'This browser is blocking scripts from other websites in general, not just the RSVP server. ' +
+        'A content blocker or strict browser setting is the likely cause.';
+    }
+  }
+
+  // Test 1: same-origin - if this page's script is running, the site itself loaded.
+  // Confirm with a fetch so a cached-page false positive is ruled out.
+  fetch('/rsvp.html', { method: 'HEAD', cache: 'no-store' }).then(function(r) {
+    setResult('page', r.ok, r.ok ? 'Website loads normally.' : 'Unexpected response: ' + r.status);
+  }).catch(function() {
+    setResult('page', false, 'Could not re-contact this website.');
+  });
+
+  // Test 2: third-party script from a benign Google CDN domain.
+  (function() {
+    var done = false;
+    var s = document.createElement('script');
+    var timer = setTimeout(function() {
+      if (done) return; done = true;
+      setResult('gstatic', false, 'Timed out loading from gstatic.com.');
+    }, 15000);
+    s.onload = function() {
+      if (done) return; done = true; clearTimeout(timer);
+      setResult('gstatic', true, 'Outside scripts load fine.');
+    };
+    s.onerror = function() {
+      if (done) return; done = true; clearTimeout(timer);
+      setResult('gstatic', false, 'Blocked or unreachable.');
+    };
+    s.src = 'https://www.gstatic.com/charts/loader.js';
+    document.head.appendChild(s);
+  })();
+
+  // Test 3: the real thing - a JSONP call to the Apps Script backend,
+  // identical to what the RSVP and organizer pages do.
+  (function() {
+    var done = false;
+    var t0 = Date.now();
+    window.diagCb = function(data) {
+      if (done) return; done = true; clearTimeout(timer);
+      var secs = ((Date.now() - t0) / 1000).toFixed(1);
+      setResult('exec', true, 'Server answered in ' + secs + 's.');
+    };
+    var timer = setTimeout(function() {
+      if (done) return; done = true;
+      setResult('exec', false, 'No answer after 20 seconds (request silently dropped).');
+    }, 20000);
+    var s = document.createElement('script');
+    s.onerror = function() {
+      if (done) return; done = true; clearTimeout(timer);
+      var secs = ((Date.now() - t0) / 1000).toFixed(1);
+      setResult('exec', false, 'Request failed after ' + secs + 's (blocked before reaching the server).');
+    };
+    s.src = BACKEND_URL + '?action=getOpenEvents&callback=diagCb';
+    document.head.appendChild(s);
+  })();
+
+  // Phone details, so a screenshot tells us the environment.
+  (function() {
+    var ua = navigator.userAgent;
+    var inAppBrowser = /; wv\)/.test(ua) || /FB_IAB|FBAN|Instagram|Line\//.test(ua);
+    var conn = navigator.connection && navigator.connection.effectiveType ? navigator.connection.effectiveType : 'unknown';
+    var html = '';
+    html += '<b>Browser type:</b> ' + (inAppBrowser ? 'IN-APP BROWSER (not the regular Chrome app)' : 'Regular browser') + '<br>';
+    html += '<b>Connection:</b> ' + conn + '<br>';
+    html += '<b>Cookies:</b> ' + (navigator.cookieEnabled ? 'enabled' : 'DISABLED') + '<br>';
+    html += '<b>Time:</b> ' + new Date().toString() + '<br>';
+    html += '<b>User agent:</b> ' + ua.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    document.getElementById('env').innerHTML = html;
+  })();
+</script>
+</body>
+</html>
