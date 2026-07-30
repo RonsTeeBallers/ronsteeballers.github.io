@@ -980,6 +980,41 @@ function sendBrevoGroupEmail_(recipients, subject, htmlBody) {
   return { sent: sent, errors: errors };
 }
 
+// Run this manually from the editor to verify Reply All on a group send.
+// It goes ONLY to the two addresses below - never to the player roster - so it
+// is safe to run any time. Put your own address in TEST_ADDRESS_ first.
+//
+// What to check when it arrives:
+//   1. The To: header lists BOTH addresses (that is what makes Reply All work).
+//   2. Hit Reply All - the reply should be addressed to ronsteeballers@gmail.com
+//      AND the other test address.
+//   3. Hit plain Reply - it should go only to ronsteeballers@gmail.com. That is
+//      expected: reaching the group requires Reply All.
+function testGroupReplyAll() {
+  var TEST_ADDRESS_ = 'PUT-YOUR-EMAIL-HERE@example.com';
+
+  if (TEST_ADDRESS_.indexOf('PUT-YOUR-EMAIL-HERE') === 0) {
+    Logger.log('Edit TEST_ADDRESS_ to your own email address first, then run again.');
+    return;
+  }
+
+  // sendBrevoGroupEmail_ adds ORGANIZER_EMAIL_ to To: on its own, so passing
+  // just the one address still produces a two-recipient email - exactly the
+  // shape a real pairings or broadcast send produces.
+  var result = sendBrevoGroupEmail_(
+    [{ email: TEST_ADDRESS_, name: 'Test Recipient' }],
+    'TEST - Reply All check',
+    '<p>Test of the group send. The To: header should list two addresses.</p>' +
+    '<p><strong>Reply All</strong> should reach both. Plain <strong>Reply</strong> ' +
+    'should reach only ronsteeballers@gmail.com.</p>'
+  );
+
+  // sent counts players only - the organizer copy is deliberately excluded,
+  // so "sent: 1" here is correct even though two addresses received the email.
+  Logger.log('sent (players only): ' + result.sent);
+  Logger.log('errors: ' + (result.errors.length ? result.errors.join(' | ') : 'none'));
+}
+
 // Run this manually from the editor to confirm Brevo sends a pairings-style
 // email to yourself. Check the Execution log for the result.
 function testBrevoSend() {
