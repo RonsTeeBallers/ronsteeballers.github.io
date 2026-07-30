@@ -1053,6 +1053,13 @@ function buildBroadcastEmailHtml_(bodyText, imageUrl) {
     safe + imageSection +
     '</div>' +
     '<div style="background:#f0f4f8;padding:12px;border-radius:0 0 12px 12px;text-align:center;">' +
+    // Same standing reminder as the pairings footer: broadcasts also go out as
+    // a single email with everyone in To:, so Reply All is what reaches the
+    // group. Note the recipients are whichever group was selected, not
+    // necessarily the whole roster - hence "everyone on this email".
+    '<p style="color:#5d6d7e;font-size:13px;margin:0 0 8px;line-height:1.5;">' +
+    '<strong>Reply All</strong> to reach everyone on this email. ' +
+    '<strong>Reply</strong> goes only to Ron.</p>' +
     '<p style="color:#aab7c4;font-size:12px;margin:0;">RonsTeeBallers Golf Group</p>' +
     '</div>' +
     '</div>';
