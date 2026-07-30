@@ -648,17 +648,12 @@ function savePairings(params) {
       });
     });
 
-    // Send the pairings directly to each player via Brevo (bypassing Gmail)
-    var sent = 0;
-    var sendErrors = [];
-    recipients.forEach(function(recipient) {
-      var sendResult = sendBrevoEmail_(recipient.email, recipient.name, subject, htmlBody);
-      if (sendResult.ok) {
-        sent++;
-      } else {
-        sendErrors.push(recipient.email + ': ' + sendResult.error);
-      }
-    });
+    // Send the pairings as a single email addressed to every player (bypassing
+    // Gmail). One message with everyone in To: means Reply All reaches the
+    // whole group - carpools, running late, foursome swaps.
+    var groupSend = sendBrevoGroupEmail_(recipients, subject, htmlBody);
+    var sent = groupSend.sent;
+    var sendErrors = groupSend.errors;
 
     // If nothing went out at all (e.g. Brevo down / bad API key), leave the
     // event Open and skip the history write so the organizer can simply fix
@@ -854,9 +849,21 @@ function previewPairings(params) {
   }
 }
 
+// Where replies go: the Reply-To on every email, and an explicit To:
+// recipient on the group sends so Reply All always reaches the organizer.
+var ORGANIZER_EMAIL_ = 'ronsteeballers@gmail.com';
+
 // Shared helper: send one transactional email through Brevo.
 // Returns { ok: true } on success, or { ok: false, error: '...' } on failure.
 function sendBrevoEmail_(toEmail, toName, subject, htmlBody) {
+  return sendBrevoPayload_([{ email: toEmail, name: toName || toEmail }], subject, htmlBody);
+}
+
+// Low-level Brevo call. toList is [{ email, name }, ...]; every address lands
+// in the To: header of a single message, so use this only when the body is
+// identical for everyone (pairings, broadcast) - never for the invite, whose
+// RSVP link is unique per player.
+function sendBrevoPayload_(toList, subject, htmlBody) {
   var apiKey = PropertiesService.getScriptProperties().getProperty('BREVO_API_KEY');
   if (!apiKey) {
     return { ok: false, error: 'Brevo API key not configured (Script Property BREVO_API_KEY)' };
@@ -870,8 +877,8 @@ function sendBrevoEmail_(toEmail, toName, subject, htmlBody) {
       },
       payload: JSON.stringify({
         sender: { name: 'RonsTeeBallers', email: 'ron@ronsteeballers.com' },
-        replyTo: { name: 'RonsTeeBallers', email: 'ronsteeballers@gmail.com' },
-        to: [{ email: toEmail, name: toName || toEmail }],
+        replyTo: { name: 'RonsTeeBallers', email: ORGANIZER_EMAIL_ },
+        to: toList,
         subject: subject,
         htmlContent: htmlBody
       }),
@@ -885,6 +892,92 @@ function sendBrevoEmail_(toEmail, toName, subject, htmlBody) {
   } catch(err) {
     return { ok: false, error: err.message };
   }
+}
+
+// Send ONE email addressed to the whole group, so every player sees every
+// other player in the To: header and Reply All reaches everyone. Used for
+// pairings and broadcasts, where the body is the same for all recipients.
+// recipients: [{ email, name }, ...]. Returns { sent: n, errors: [...] },
+// matching the counts the per-recipient loops used to produce.
+function sendBrevoGroupEmail_(recipients, subject, htmlBody) {
+  var errors = [];
+  var players = [];
+  var seen = {};
+  // The organizer is added to every message separately (see below), so keep him
+  // out of the player list here - this also collapses the duplicate when he is
+  // a recipient in his own right.
+  var organizer = { email: ORGANIZER_EMAIL_, name: 'Ron' };
+  var organizerIsPlayer = false;
+  seen[ORGANIZER_EMAIL_.toLowerCase()] = true;
+
+  recipients.forEach(function(r) {
+    var email = (r && r.email ? r.email : '').toString().trim();
+    // Brevo rejects the ENTIRE message if any one address is malformed, so
+    // screen them out here rather than losing the send for everybody.
+    if (!email || email.indexOf('@') < 1 || email.indexOf(' ') !== -1 || email.lastIndexOf('.') < email.indexOf('@')) {
+      errors.push((email || '(blank)') + ': not a valid email address, skipped');
+      return;
+    }
+    var key = email.toLowerCase();
+    if (key === ORGANIZER_EMAIL_.toLowerCase()) { organizerIsPlayer = true; return; }
+    if (seen[key]) return;
+    seen[key] = true;
+    players.push({ email: email, name: ((r.name || '').toString().trim() || email) });
+  });
+
+  if (players.length === 0) {
+    // The organizer was the only valid recipient - there is no group to
+    // address, but he should still get the email.
+    if (organizerIsPlayer) {
+      var solo = sendBrevoPayload_([organizer], subject, htmlBody);
+      if (solo.ok) return { sent: 1, errors: errors };
+      errors.push(ORGANIZER_EMAIL_ + ': ' + solo.error);
+    }
+    return { sent: 0, errors: errors };
+  }
+
+  // Brevo caps a single message at 99 addresses. The group is far smaller, but
+  // chunk anyway so an oversized list degrades into a couple of group emails
+  // instead of failing outright. 98 players + the organizer = the cap.
+  var sent = 0;
+  var anyChunkSent = false;
+  for (var i = 0; i < players.length; i += 98) {
+    var group = players.slice(i, i + 98);
+    // Put the organizer in To: on EVERY message explicitly. Reply-To alone is
+    // not enough: it relies on each player's mail app folding Reply-To into
+    // Reply All, and the pairings list is built from the foursomes, so Ron
+    // would be left off entirely on any outing he is not playing in.
+    var result = sendBrevoPayload_([organizer].concat(group), subject, htmlBody);
+    if (result.ok) {
+      sent += group.length;
+      anyChunkSent = true;
+      continue;
+    }
+    // The group send failed as a unit. A 400 means Brevo rejected something in
+    // the payload - most likely a single bad address - so retry individually:
+    // the players lose Reply All for this one send, but they still get the
+    // message and the organizer sees exactly which address was the problem.
+    // Any other failure (bad API key, Brevo down) would fail identically for
+    // every address, so don't burn the execution time retrying.
+    if (result.error.indexOf('HTTP 400') !== 0) {
+      errors.push('Group send failed: ' + result.error);
+      continue;
+    }
+    errors.push('Group send rejected (' + result.error + ') - sent individually instead');
+    group.forEach(function(r) {
+      var one = sendBrevoPayload_([r], subject, htmlBody);
+      if (one.ok) sent++; else errors.push(r.email + ': ' + one.error);
+    });
+    // Individual sends leave the organizer off, so give him his own copy.
+    var toRon = sendBrevoPayload_([organizer], subject, htmlBody);
+    if (toRon.ok) anyChunkSent = true;
+    else errors.push(ORGANIZER_EMAIL_ + ': ' + toRon.error);
+  }
+
+  // Only count the organizer toward "sent" when he was a genuine recipient -
+  // the reply-all copy must not inflate the count the organizer UI shows.
+  if (organizerIsPlayer && anyChunkSent) sent++;
+  return { sent: sent, errors: errors };
 }
 
 // Run this manually from the editor to confirm Brevo sends a pairings-style
@@ -1004,12 +1097,12 @@ function broadcastEmail(params) {
     }
 
     var htmlBody = buildBroadcastEmailHtml_(body, (params.imageUrl || '').toString());
-    var sent = 0;
-    var errors = [];
-    recipients.forEach(function(r) {
-      var res = sendBrevoEmail_(r.email, r.firstName, subject, htmlBody);
-      if (res.ok) sent++; else errors.push(r.email + ': ' + res.error);
-    });
+    // One email addressed to the whole group so replies can go to everyone.
+    var groupSend = sendBrevoGroupEmail_(recipients.map(function(r) {
+      return { email: r.email, name: r.firstName };
+    }), subject, htmlBody);
+    var sent = groupSend.sent;
+    var errors = groupSend.errors;
 
     return ContentService.createTextOutput(JSON.stringify({
       success: true, sent: sent, total: recipients.length, errors: errors
