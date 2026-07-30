@@ -744,6 +744,12 @@ function buildPairingsEmailHtml_(o) {
     '<p style="color:#5d6d7e;font-size:14px;">Tee times reserved under the name Ron Blanton.</p>' +
     '</div>' +
     '<div style="background:#f0f4f8;padding:12px;border-radius:0 0 12px 12px;text-align:center;">' +
+    // Standing reminder: pairings go to the whole group in a single To:, so
+    // Reply All is what reaches everyone. It lives here rather than in the
+    // organizer's comment so new players get it without anyone remembering.
+    '<p style="color:#5d6d7e;font-size:13px;margin:0 0 8px;line-height:1.5;">' +
+    '<strong>Reply All</strong> to reach everyone on this email. ' +
+    '<strong>Reply</strong> goes only to Ron.</p>' +
     '<p style="color:#aab7c4;font-size:12px;margin:0;">See you on the course!</p>' +
     '</div>' +
     '</div>';
