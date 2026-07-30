@@ -708,6 +708,67 @@
     setTimeout(function() { t.classList.remove('show'); }, 3000);
   }
 
+  // reportSendResult leaves a persistent error style on the status element, so
+  // clear it when a preview reloads - otherwise the next "Loading preview..."
+  // still shows in red from the previous failed send.
+  function resetSendStatus(el) {
+    el.style.whiteSpace = '';
+    el.style.color = '';
+    return el;
+  }
+
+  // Report the outcome of a bulk send. The backend returns success:true even
+  // when SOME recipients failed, so a clean-looking toast used to hide partial
+  // failures completely - "Sent 18 invites successfully!" with no hint that 6
+  // people got nothing. Brevo throttling makes that a real occurrence, not a
+  // theoretical one.
+  //
+  // Clean send: close the modal and toast as before. Partial failure: leave the
+  // modal OPEN and write a persistent list of the addresses that failed - a 3s
+  // toast would hide exactly the information needed to chase them.
+  // Returns true when everything went out.
+  function reportSendResult(data, noun, statusElId, onCleanSend) {
+    var sent = data.sent || 0;
+    var errs = data.errors || [];
+    var total = (typeof data.total === 'number') ? data.total : sent;
+
+    if (!errs.length) {
+      if (onCleanSend) onCleanSend();
+      showToast('Sent ' + sent + ' ' + noun + (sent === 1 ? '' : 's') + ' successfully!');
+      return true;
+    }
+
+    // errors mixes two kinds of entry: per-recipient failures ("<addr>:
+    // reason") and whole-send diagnostics from sendBrevoGroupEmail_, which are
+    // the only entries not tied to one person and are always prefixed "Group
+    // send". Counting those as people who missed the email would overstate the
+    // damage. Match the known prefix rather than sniffing for "@" - a player
+    // with a malformed address ("not-an-email: ... skipped") has no "@" but
+    // absolutely did miss the email and must be counted.
+    var people = [], notes = [];
+    errs.forEach(function(e) {
+      if (String(e).indexOf('Group send') === 0) notes.push(e); else people.push(e);
+    });
+
+    var msg = 'Sent ' + sent + ' of ' + total + '.';
+    if (people.length) {
+      msg += ' ' + people.length + ' failed - these people did NOT get the email:\n' +
+        people.join('\n') +
+        '\n\nCheck those addresses in Players. Note that Send Invites again goes ' +
+        'to the WHOLE list - to chase only these people, use Send Reminders, ' +
+        'which skips anyone who has already responded.';
+    }
+    if (notes.length) {
+      msg += (people.length ? '\n\n' : ' ') + 'Note: ' + notes.join('\n');
+    }
+
+    var el = document.getElementById(statusElId);
+    el.style.whiteSpace = 'pre-line';   // one entry per line
+    el.style.color = '#c0392b';
+    el.textContent = msg;
+    return false;
+  }
+
   var jsonpSeq = 0;
 
   // JSONP with a timeout and error fallback: the callback ALWAYS fires exactly
@@ -819,7 +880,7 @@ function viewPlayers(idx) {
   }
 
   function loadInvitePreview() {
-    var status = document.getElementById('invite-preview-status');
+    var status = resetSendStatus(document.getElementById('invite-preview-status'));
     status.textContent = 'Loading preview…';
     jsonpCall('previewInvite', {
       eventId: currentInviteEventId,
@@ -855,8 +916,7 @@ function viewPlayers(idx) {
       btn.disabled = false;
       btn.textContent = 'Send Invites';
       if (data && data.success) {
-        hideInvitePreview();
-        showToast('Sent ' + data.sent + ' invites successfully!');
+        reportSendResult(data, 'invite', 'invite-preview-status', hideInvitePreview);
       } else {
         document.getElementById('invite-preview-status').textContent =
           'Send error: ' + ((data && data.error) || 'Unknown error');
@@ -893,7 +953,7 @@ function viewPlayers(idx) {
   }
 
   function loadRemindPreview() {
-    var status = document.getElementById('remind-preview-status');
+    var status = resetSendStatus(document.getElementById('remind-preview-status'));
     var audience = document.getElementById('remind-audience').value;
     status.textContent = 'Loading preview…';
     jsonpCall('previewInvite', {
@@ -936,8 +996,7 @@ function viewPlayers(idx) {
       btn.disabled = false;
       btn.textContent = 'Send Reminders';
       if (data && data.success) {
-        hideRemindPreview();
-        showToast('Sent ' + data.sent + ' reminder' + (data.sent === 1 ? '' : 's') + '!');
+        reportSendResult(data, 'reminder', 'remind-preview-status', hideRemindPreview);
       } else {
         document.getElementById('remind-preview-status').textContent =
           'Send error: ' + ((data && data.error) || 'Unknown error');
@@ -971,7 +1030,7 @@ function viewPlayers(idx) {
   function loadBroadcastCount() {
     var group = document.getElementById('broadcast-group').value;
     var body = document.getElementById('broadcast-body').value;
-    document.getElementById('broadcast-info').textContent = 'Loading recipient count…';
+    resetSendStatus(document.getElementById('broadcast-info')).textContent = 'Loading recipient count…';
     jsonpCall('broadcastPreview', { group: group, body: body, imageUrl: broadcastImageUrl }, function(data) {
       if (data && data.success) {
         document.getElementById('broadcast-info').textContent =
@@ -1094,8 +1153,7 @@ function viewPlayers(idx) {
       btn.disabled = false;
       btn.textContent = 'Send to All';
       if (data && data.success) {
-        hideBroadcast();
-        showToast('Sent to ' + data.sent + ' of ' + data.total + ' players.');
+        reportSendResult(data, 'message', 'broadcast-info', hideBroadcast);
       } else {
         document.getElementById('broadcast-info').textContent =
           'Send error: ' + ((data && data.error) || 'Unknown error');
