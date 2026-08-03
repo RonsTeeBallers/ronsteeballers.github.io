@@ -1226,7 +1226,7 @@ function maskEmail_(email) {
   if (at < 1) return email;
   var local = email.slice(0, at);
   var domain = email.slice(at);
-  return (local.length <= 2 ? local : local.slice(0, 2) + '••••') + domain;
+  return (local.length <= 2 ? local : local.slice(0, 2) + '****') + domain;
 }
 
 function buildTestEmailHtml_(bodyText, stampStr) {
