@@ -315,6 +315,11 @@
       <span>Send email to active players</span>
       <span class="arrow">›</span>
     </button>
+    <button class="tool-btn" onclick="showTestEmail()">
+      <span class="icon">🧪</span>
+      <span>Send a test email (one player)</span>
+      <span class="arrow">›</span>
+    </button>
     <button class="tool-btn" onclick="showImpersonate()">
       <span class="icon">🎭</span>
       <span>Respond as a player</span>
@@ -417,6 +422,39 @@
     <div class="modal-actions">
       <button class="btn btn-secondary" onclick="hideBroadcast()">Cancel</button>
       <button class="btn btn-primary" id="btn-send-broadcast" onclick="sendBroadcast()">Send to All</button>
+    </div>
+  </div>
+</div>
+
+<!-- Single Test Email Modal -->
+<div class="modal-overlay" id="test-modal">
+  <div class="modal">
+    <h2>Send a Test Email</h2>
+    <div style="background:#eaf2ff;padding:12px;border-radius:8px;margin-bottom:16px;font-size:13px;color:#1a2332;">
+      Sends <strong>one</strong> email to <strong>one</strong> person — handy while you have them on the phone. The time is stamped in the subject and body so they can tell it apart from older mail.
+    </div>
+    <div class="form-group">
+      <label class="form-label">Player</label>
+      <select class="form-input" id="test-player">
+        <option value="">Loading players…</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">…or send to a different address instead (optional)</label>
+      <input class="form-input" id="test-alt-email" type="email" placeholder="someone@example.com" autocapitalize="off" autocorrect="off">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Subject</label>
+      <input class="form-input" id="test-subject" type="text">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Message (optional)</label>
+      <textarea class="form-input" id="test-body" rows="3" style="resize:vertical;" placeholder="Leave blank for a short default test message."></textarea>
+    </div>
+    <div id="test-result" style="display:none;font-size:14px;padding:12px;border-radius:8px;margin-bottom:8px;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="hideTestEmail()">Close</button>
+      <button class="btn btn-primary" id="btn-send-test" onclick="submitTestEmail()">Send Test Email</button>
     </div>
   </div>
 </div>
@@ -1241,6 +1279,73 @@ function viewPlayers(idx) {
   var impPlaying = '';
   var impWalkRide = '';
   var impScoring = '';
+
+  // ── Single test email (deliverability check, one recipient) ───────
+  function showTestEmail() {
+    var sel = document.getElementById('test-player');
+    sel.innerHTML = '<option value="">Loading players…</option>';
+    document.getElementById('test-alt-email').value = '';
+    document.getElementById('test-body').value = '';
+    document.getElementById('test-result').style.display = 'none';
+    var now = new Date();
+    var t = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    document.getElementById('test-subject').value = 'RonsTeeBallers email test - ' + t;
+    var btn = document.getElementById('btn-send-test');
+    btn.disabled = false;
+    btn.textContent = 'Send Test Email';
+    document.getElementById('test-modal').classList.add('show');
+
+    jsonpCall('getPlayers', {}, function(data) {
+      var players = (data && data.players) || [];
+      sel.innerHTML = '<option value="">Select a player…</option>';
+      players.forEach(function(p) {
+        var o = document.createElement('option');
+        o.value = p.slug;
+        o.textContent = p.name + (p.active ? '' : ' (inactive)');
+        sel.appendChild(o);
+      });
+    });
+  }
+
+  function hideTestEmail() {
+    document.getElementById('test-modal').classList.remove('show');
+  }
+
+  function showTestResult(ok, msg) {
+    var el = document.getElementById('test-result');
+    el.style.display = 'block';
+    el.style.background = ok ? '#eafaf1' : '#fdedec';
+    el.style.color = ok ? '#186a3b' : '#922b21';
+    el.innerHTML = msg;
+  }
+
+  function submitTestEmail() {
+    var slug = document.getElementById('test-player').value;
+    var alt = document.getElementById('test-alt-email').value.trim();
+    if (!slug && !alt) { showToast('Pick a player, or type an email address.'); return; }
+    var btn = document.getElementById('btn-send-test');
+    btn.disabled = true;
+    btn.textContent = 'Sending…';
+    document.getElementById('test-result').style.display = 'none';
+
+    jsonpCall('sendTestEmail', {
+      slug: alt ? '' : slug,
+      email: alt,
+      subject: document.getElementById('test-subject').value.trim(),
+      body: document.getElementById('test-body').value.trim()
+    }, function(data) {
+      btn.disabled = false;
+      btn.textContent = 'Send Test Email';
+      if (data && data.success) {
+        showTestResult(true,
+          '✅ Handed to Brevo at <strong>' + esc(data.sentAt) + '</strong><br>' +
+          'To: <strong>' + esc(data.to) + '</strong>' +
+          '<div style="margin-top:6px;font-size:13px;">Ask them to check <em>Inbox first, then Junk/Spam</em>. Delivery can lag a few minutes.</div>');
+      } else {
+        showTestResult(false, '❌ ' + esc((data && data.error) || 'Unknown error'));
+      }
+    });
+  }
 
   function showImpersonate() {
     impSelectedPlayer = null;

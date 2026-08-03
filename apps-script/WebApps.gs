@@ -4,7 +4,7 @@ function doGet(e) {
   var callback = params.callback || '';
   var result;
 
-  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, savePairingDraft: true, getPairingDraft: true, closeEvent: true, broadcastEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true, findTeeTimeAvailability: true };
+  var GUARDED = { createEvent: true, sendInviteEmails: true, savePairings: true, savePairingDraft: true, getPairingDraft: true, closeEvent: true, broadcastEmail: true, sendTestEmail: true, getPlayers: true, organizerSubmitRSVP: true, getPlayerDetail: true, savePlayer: true, findTeeTimeAvailability: true };
   if (GUARDED[action] && !passcodeOk_(params)) {
     result = ContentService.createTextOutput(JSON.stringify({error: 'Unauthorized: invalid organizer passcode'}))
       .setMimeType(ContentService.MimeType.JSON);
@@ -46,6 +46,8 @@ function doGet(e) {
     result = previewInvite(params);
   } else if (action === 'broadcastPreview') {
     result = broadcastPreview(params);
+  } else if (action === 'sendTestEmail') {
+    result = sendTestEmail(params);
   } else if (action === 'broadcastEmail') {
     result = broadcastEmail(params);
   } else if (action === 'checkPasscode') {
@@ -1208,6 +1210,102 @@ function uploadImage(data) {
     })).setMimeType(ContentService.MimeType.JSON);
   } catch(err) {
     return ContentService.createTextOutput(JSON.stringify({error: err.message}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ── One-off deliverability test to a single player ────────────────────────
+// Diagnostic only: send ONE email, on demand, usually while the organizer has
+// the player on the phone. Deliberately separate from broadcastEmail so a
+// mis-click can never reach the whole group.
+
+// Show enough of an address to confirm it aloud ("...is that your gmail?")
+// without turning this endpoint into an email-harvesting API.
+function maskEmail_(email) {
+  var at = email.indexOf('@');
+  if (at < 1) return email;
+  var local = email.slice(0, at);
+  var domain = email.slice(at);
+  return (local.length <= 2 ? local : local.slice(0, 2) + '••••') + domain;
+}
+
+function buildTestEmailHtml_(bodyText, stampStr) {
+  var safe = (bodyText || '').replace(/\r\n/g, '\n').replace(/\n/g, '<br>');
+  return '<meta charset="utf-8">' +
+    '<div style="font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;padding:20px;">' +
+    '<div style="background:#1a5276;color:white;padding:20px;border-radius:12px 12px 0 0;text-align:center;">' +
+    '<div style="font-size:32px;">&#9971;</div>' +
+    '<h1 style="margin:8px 0;font-size:22px;">RonsTeeBallers</h1>' +
+    '</div>' +
+    '<div style="background:white;padding:24px;border:1px solid #e0e8f0;border-top:none;font-size:16px;color:#1a2332;line-height:1.6;">' +
+    safe +
+    '<p style="background:#eaf2ff;padding:12px;border-radius:8px;border-left:3px solid #1a5276;font-size:15px;">' +
+    '<strong>Sent ' + stampStr + '</strong><br>' +
+    'If you found this in your Junk or Spam folder, please mark it &ldquo;Not Junk&rdquo; and add ' +
+    '<strong>ron@ronsteeballers.com</strong> to your contacts so future golf emails reach your inbox.' +
+    '</p>' +
+    '</div>' +
+    '<div style="background:#f0f4f8;padding:12px;border-radius:0 0 12px 12px;text-align:center;">' +
+    '<p style="color:#aab7c4;font-size:12px;margin:0;">RonsTeeBallers Golf Group</p>' +
+    '</div>' +
+    '</div>';
+}
+
+// params: slug (player from Players tab) OR email (ad-hoc address), plus
+// optional subject / body. Returns the masked address actually used.
+function sendTestEmail(params) {
+  try {
+    var slug = (params.slug || '').toString().trim();
+    var altEmail = (params.email || '').toString().trim();
+    var toEmail = '';
+    var toName = '';
+
+    if (altEmail) {
+      if (altEmail.indexOf('@') === -1) {
+        return ContentService.createTextOutput(JSON.stringify({error: 'That does not look like an email address.'}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      toEmail = altEmail;
+      toName = (params.name || '').toString().trim() || 'Golfer';
+    } else {
+      if (!slug) {
+        return ContentService.createTextOutput(JSON.stringify({error: 'Pick a player, or enter an email address.'}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var rows = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Players').getDataRange().getValues();
+      for (var i = 1; i < rows.length; i++) {
+        var lastFirst = rows[i][0].toString().trim();
+        if (!lastFirst) continue;
+        var s = lastFirst.toLowerCase()
+          .replace(/,\s*/g, '-').replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        if (s === slug) {
+          toEmail = rows[i][3].toString().trim();
+          toName = rows[i][1].toString().trim();
+          break;
+        }
+      }
+      if (!toEmail || toEmail.indexOf('@') === -1) {
+        return ContentService.createTextOutput(JSON.stringify({error: 'No valid email on file for that player.'}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    var stampStr = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'EEE MMM d, h:mm:ss a');
+    var subject = (params.subject || '').toString().trim() || ('RonsTeeBallers email test - ' + stampStr);
+    var body = (params.body || '').toString().trim() ||
+      ('Hi ' + (toName || 'there') + ',<br><br>This is a quick test to confirm our golf emails are reaching you.');
+
+    var res = sendBrevoEmail_(toEmail, toName, subject, buildTestEmailHtml_(body, stampStr));
+    if (!res.ok) {
+      return ContentService.createTextOutput(JSON.stringify({error: res.error}))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+    return ContentService.createTextOutput(JSON.stringify({
+      success: true, to: maskEmail_(toEmail), name: toName, sentAt: stampStr
+    })).setMimeType(ContentService.MimeType.JSON);
+
+  } catch(e) {
+    return ContentService.createTextOutput(JSON.stringify({error: e.message}))
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
