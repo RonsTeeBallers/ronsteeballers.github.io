@@ -835,7 +835,7 @@
       callback(data);
     }
     var timer = setTimeout(function() {
-      finish({ error: 'No response from the server. This can be caused by a bad connection or Safari’s "Prevent Cross-Site Tracking" setting — check and try again.' });
+      finish({ error: 'Still waiting on the server — it may have finished anyway. Check the spreadsheet (or your sent mail) BEFORE trying again, so you do not do it twice. If nothing happened, check your connection and retry.' });
     }, timeoutMs || 15000);
     window[fnName] = finish;
     script.onerror = function() { finish({ error: 'Could not reach the server (blocked or network error). Please try again.' }); };
@@ -1265,7 +1265,7 @@ function viewPlayers(idx) {
         btn.textContent = 'Create Event';
         if (data && data.success) { hideCreateEvent(); showToast('Event created!'); loadEvents(); }
         else { showCreateError((data && data.error) || 'Unknown error'); }
-      });
+      }, 60000);  // sheet write + Apps Script cold start can exceed the 15s default
     } catch (e) {
       if (btn) { btn.disabled = false; btn.textContent = 'Create Event'; }
       showCreateError('Script error: ' + e.message);
@@ -1344,7 +1344,7 @@ function viewPlayers(idx) {
       } else {
         showTestResult(false, '❌ ' + esc((data && data.error) || 'Unknown error'));
       }
-    });
+    }, 60000);  // Brevo call + Apps Script cold start can exceed the 15s default
   }
 
   function showImpersonate() {
@@ -1502,7 +1502,7 @@ function viewPlayers(idx) {
       } else {
         showImpError((data && data.error) || 'Unknown error');
       }
-    });
+    }, 60000);  // sheet write + Apps Script cold start can exceed the 15s default
   }
 
   // ── Add / Edit a Player ────────────────────────────────────────────
@@ -1638,7 +1638,7 @@ function viewPlayers(idx) {
       } else {
         showMpError((data && data.error) || 'Unknown error');
       }
-    });
+    }, 60000);  // sheet write + Apps Script cold start can exceed the 15s default
   }
 
   function showTeeTimeFinder() {

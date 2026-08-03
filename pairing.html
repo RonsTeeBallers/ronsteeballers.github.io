@@ -375,7 +375,7 @@ function jsonp(action, params, cb, timeoutMs) {
     cb(data);
   }
   var timer = setTimeout(function() {
-    finish({ error: 'No response from the server. Check your connection (or Safari’s "Prevent Cross-Site Tracking" setting) and try again.' });
+    finish({ error: 'Still waiting on the server — it may have finished anyway. Check before trying again, so you do not do it twice. If nothing happened, check your connection and retry.' });
   }, timeoutMs || 15000);
   window[fn] = finish;
   s.onerror = function() { finish({ error: 'Could not reach the server (blocked or network error). Please try again.' }); };
