@@ -1596,9 +1596,11 @@ function buildInviteEmailHtml_(o) {
     '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#9200; ' + o.timeStr + ' (first tee time)</p>' +
     '<p style="margin:4px 0;font-size:14px;color:#5d6d7e;">' + o.slotsReserved + ' tee times reserved under the name Ron Blanton</p>' +
     '</div>';
-  var buttonsBlock = '<div style="text-align:center;margin:24px 0;">' +
-    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#1a5276;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#9989; I\'M IN</a>' +
-    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#922b21;color:white;padding:16px 32px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;margin:0 8px;">&#10060; I\'M OUT</a>' +
+  // One button, not two. The old I'M IN / I'M OUT pair duplicated the buttons on
+  // the RSVP page itself, which made the email click look like the response - it
+  // never was. This says what the link actually does; the choice is made on the page.
+  var rsvpButton = '<div style="text-align:center;margin:24px 0;">' +
+    '<a href="' + o.rsvpUrl + '" style="display:inline-block;background:#1a5276;color:white;padding:16px 40px;border-radius:10px;text-decoration:none;font-size:18px;font-weight:700;">&#9971; RSVP &#8212; I\'m In or I\'m Out</a>' +
     '</div>';
   var signupLine = '<p style="text-align:center;color:#5d6d7e;font-size:14px;">See who else is playing: <a href="' + o.signupUrl + '" style="color:#1a5276;">View Signup List</a></p>';
 
@@ -1614,7 +1616,7 @@ function buildInviteEmailHtml_(o) {
       detailsBlock +
       feeSection +
       courseNotesSection +
-      buttonsBlock +
+      rsvpButton +
       signupLine;
   } else {
     bodyContent =
@@ -1625,7 +1627,7 @@ function buildInviteEmailHtml_(o) {
       feeSection +
       courseNotesSection +
       commentSection +
-      buttonsBlock +
+      rsvpButton +
       signupLine;
   }
 
