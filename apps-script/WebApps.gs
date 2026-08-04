@@ -2200,7 +2200,9 @@ function findTeeTimeAvailability(params) {
     var coursesSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Courses');
     var coursesData = coursesSheet.getDataRange().getValues();
 
-    var results = [];
+    // One job per course, in sheet order. Courses we cannot query are settled
+    // here; the rest get their tee sheets fetched in parallel below.
+    var jobs = [];
     for (var i = 1; i < coursesData.length; i++) {
       var row = coursesData[i];
       var courseName = (row[0] || '').toString().trim();
@@ -2210,49 +2212,104 @@ function findTeeTimeAvailability(params) {
       var interval = parseInt(row[10]) || 9;                // col K
 
       if (!bookingUrl) {
-        results.push({ course: courseName, status: 'manual' });
+        jobs.push({ course: courseName, manualResult: { course: courseName, status: 'manual' } });
         continue;
       }
 
       var platform = getPlatformInfo_(bookingUrl);
       if (!platform) {
-        results.push({ course: courseName, status: 'manual', bookingUrl: bookingUrl });
+        jobs.push({
+          course: courseName,
+          manualResult: { course: courseName, status: 'manual', bookingUrl: bookingUrl }
+        });
         continue;
       }
 
-      try {
-        var slots;
-        if (platform.type === 'foreup') {
-          slots = fetchForeUpTimes_(platform.host, platform.scheduleId, formatDateForForeUp_(date));
-        } else if (platform.type === 'golfrev') {
-          slots = fetchGolfRevTimes_(platform.courseid, platform.htc, formatDateForGolfRev_(date));
-        } else if (platform.type === 'chronogolf') {
-          slots = fetchChronogolfTimes_(platform.clubId, date, playersPerSlot);
-        } else {
-          slots = null;
-        }
-
-        if (!slots) {
-          results.push({ course: courseName, status: 'manual', bookingUrl: bookingUrl });
-          continue;
-        }
-
-        var window = findConsecutiveWindow_(slots, interval, playersPerSlot, minConsecutive, earliestMinutes);
-        if (window) {
-          results.push({
-            course: courseName,
-            status: 'available',
-            firstTime: window[0].time,
-            count: window.length,
-            bookingUrl: bookingUrl
-          });
-        } else {
-          results.push({ course: courseName, status: 'none', bookingUrl: bookingUrl });
-        }
-      } catch (courseErr) {
-        results.push({ course: courseName, status: 'error', bookingUrl: bookingUrl, error: courseErr.message });
-      }
+      jobs.push({
+        course: courseName, bookingUrl: bookingUrl, interval: interval,
+        platform: platform, slots: null, error: null
+      });
     }
+
+    // Round 1: every course's first (usually only) request, all in flight at
+    // once. Fetching these one at a time is what pushed this past the 90s
+    // client timeout - ~15 courses x a slow booking site adds up fast.
+    var round1 = [];
+    jobs.forEach(function(job, idx) {
+      if (!job.platform) return;
+      var p = job.platform;
+      if (p.type === 'foreup') {
+        round1.push({ idx: idx, req: foreUpRequest_(p.host, p.scheduleId, formatDateForForeUp_(date)) });
+      } else if (p.type === 'golfrev') {
+        round1.push({ idx: idx, req: golfRevRequest_(p.courseid, p.htc, formatDateForGolfRev_(date)) });
+      } else if (p.type === 'chronogolf') {
+        round1.push({ idx: idx, req: chronogolfClubRequest_(p.clubId) });
+      }
+    });
+
+    var resp1 = fetchAllTolerant_(round1.map(function(entry) { return entry.req; }));
+
+    // Round 2 exists only for Chronogolf: the course id and affiliation type id
+    // live in the club page, so its tee sheet cannot be reached in one hop.
+    var round2 = [];
+    round1.forEach(function(entry, k) {
+      var job = jobs[entry.idx];
+      var resp = resp1[k];
+      if (!resp) { job.error = 'no response from booking site'; return; }
+      try {
+        if (job.platform.type === 'foreup') {
+          job.slots = parseForeUpTimes_(resp.getContentText());
+        } else if (job.platform.type === 'golfrev') {
+          job.slots = parseGolfRevTimes_(resp.getContentText());
+        } else if (job.platform.type === 'chronogolf') {
+          var club = parseChronogolfClub_(resp.getContentText());
+          if (!club) { job.slots = []; return; }
+          round2.push({
+            idx: entry.idx,
+            req: chronogolfTimesRequest_(job.platform.clubId, date, club.courseId,
+                                         club.affiliationTypeId, playersPerSlot)
+          });
+        }
+      } catch (parseErr) {
+        job.error = parseErr.message;
+      }
+    });
+
+    if (round2.length) {
+      var resp2 = fetchAllTolerant_(round2.map(function(entry) { return entry.req; }));
+      round2.forEach(function(entry, k) {
+        var job = jobs[entry.idx];
+        var resp = resp2[k];
+        if (!resp) { job.error = 'no response from booking site'; return; }
+        try {
+          job.slots = parseChronogolfTimes_(resp.getContentText(), playersPerSlot);
+        } catch (parseErr) {
+          job.error = parseErr.message;
+        }
+      });
+    }
+
+    // Everything below is local - no more network.
+    var results = jobs.map(function(job) {
+      if (job.manualResult) return job.manualResult;
+      if (job.error) {
+        return { course: job.course, status: 'error', bookingUrl: job.bookingUrl, error: job.error };
+      }
+      if (!job.slots) return { course: job.course, status: 'manual', bookingUrl: job.bookingUrl };
+
+      var window = findConsecutiveWindow_(job.slots, job.interval, playersPerSlot,
+                                          minConsecutive, earliestMinutes);
+      if (window) {
+        return {
+          course: job.course,
+          status: 'available',
+          firstTime: window[0].time,
+          count: window.length,
+          bookingUrl: job.bookingUrl
+        };
+      }
+      return { course: job.course, status: 'none', bookingUrl: job.bookingUrl };
+    });
 
     var order = { available: 0, none: 1, manual: 2, error: 3 };
     results.sort(function(a, b) { return order[a.status] - order[b.status]; });
@@ -2319,16 +2376,43 @@ function timeStrToMinutes_(hhmm) {
   return h * 60 + m;
 }
 
+// UrlFetchApp.fetchAll runs its requests in parallel, but it is all-or-nothing:
+// muteHttpExceptions swallows HTTP error STATUSES, not connection-level failures
+// (DNS, refused, timeout), so one dead booking site would throw and take down
+// every other course with it. On a batch failure, retry individually so the rest
+// still report. Returns an array parallel to `requests`; null means that one
+// failed. Callers must handle null.
+function fetchAllTolerant_(requests) {
+  if (!requests.length) return [];
+  try {
+    return UrlFetchApp.fetchAll(requests);
+  } catch (batchErr) {
+    return requests.map(function(req) {
+      try {
+        return UrlFetchApp.fetch(req.url, req);
+      } catch (oneErr) {
+        return null;
+      }
+    });
+  }
+}
+
+// Each platform is split into a request builder and a parser so every course's
+// request can be handed to fetchAll together instead of awaited in turn.
+
 // foreUp public JSON API - returns only slots that still have room.
-function fetchForeUpTimes_(host, scheduleId, dateStr) {
-  var url = 'https://' + host + '/index.php/api/booking/times?time=all&date=' + encodeURIComponent(dateStr) +
-    '&holes=all&players=0&booking_class=&schedule_id=' + scheduleId +
-    '&schedule_ids%5B%5D=' + scheduleId + '&specials_only=0&api_key=no_external_api_key';
-  var resp = UrlFetchApp.fetch(url, {
+function foreUpRequest_(host, scheduleId, dateStr) {
+  return {
+    url: 'https://' + host + '/index.php/api/booking/times?time=all&date=' + encodeURIComponent(dateStr) +
+      '&holes=all&players=0&booking_class=&schedule_id=' + scheduleId +
+      '&schedule_ids%5B%5D=' + scheduleId + '&specials_only=0&api_key=no_external_api_key',
     muteHttpExceptions: true,
     headers: { 'X-Requested-With': 'XMLHttpRequest' }
-  });
-  var data = JSON.parse(resp.getContentText());
+  };
+}
+
+function parseForeUpTimes_(text) {
+  var data = JSON.parse(text);
   if (!data || !data.length) return [];
 
   return data.map(function(slot) {
@@ -2338,12 +2422,15 @@ function fetchForeUpTimes_(host, scheduleId, dateStr) {
 }
 
 // GolfRev HTML fragment endpoint - one card per bookable slot.
-function fetchGolfRevTimes_(courseid, htc, dateStr) {
-  var url = 'https://www.golfrev.com/go/tee_times/teetime_table_html.asp?c=' + courseid +
-    '&s=' + encodeURIComponent(dateStr) + '&h=' + htc + '&specials=&reset=yes&snapshot=no';
-  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
-  var html = resp.getContentText();
+function golfRevRequest_(courseid, htc, dateStr) {
+  return {
+    url: 'https://www.golfrev.com/go/tee_times/teetime_table_html.asp?c=' + courseid +
+      '&s=' + encodeURIComponent(dateStr) + '&h=' + htc + '&specials=&reset=yes&snapshot=no',
+    muteHttpExceptions: true
+  };
+}
 
+function parseGolfRevTimes_(html) {
   var slots = [];
   var re = /showBooking\('([^']+)',(\d+),(\d+),(\d+),(\d+),/g;
   var match;
@@ -2358,26 +2445,37 @@ function fetchGolfRevTimes_(courseid, htc, dateStr) {
 }
 
 // Chronogolf JSON API. Course id + affiliation type id aren't in the booking
-// URL, so this scrapes the club page's embedded __NEXT_DATA__ once per call
-// to find them, then queries the teetimes endpoint for the requested date.
-function fetchChronogolfTimes_(clubId, isoDate, players) {
-  var pageResp = UrlFetchApp.fetch('https://www.chronogolf.com/club/' + clubId, { muteHttpExceptions: true });
-  var html = pageResp.getContentText();
+// URL, so the club page's embedded __NEXT_DATA__ has to be scraped first to
+// find them. That dependency is why Chronogolf needs a second fetchAll round -
+// its two hops cannot be collapsed into one.
+function chronogolfClubRequest_(clubId) {
+  return { url: 'https://www.chronogolf.com/club/' + clubId, muteHttpExceptions: true };
+}
+
+// Returns {courseId, affiliationTypeId}, or null if the page shape changed.
+function parseChronogolfClub_(html) {
   var m = html.match(/__NEXT_DATA__[^>]*>([\s\S]*?)<\/script>/);
-  if (!m) return [];
+  if (!m) return null;
 
   var nextData = JSON.parse(m[1]);
   var club = nextData.props && nextData.props.pageProps && nextData.props.pageProps.club;
-  if (!club || !club.courses || !club.courses.length) return [];
+  if (!club || !club.courses || !club.courses.length) return null;
 
-  var courseId = club.courses[0].id;
-  var affiliationTypeId = club.defaultAffiliationTypeId;
+  return { courseId: club.courses[0].id, affiliationTypeId: club.defaultAffiliationTypeId };
+}
 
-  var url = 'https://www.chronogolf.com/marketplace/clubs/' + clubId + '/teetimes?date=' +
-    encodeURIComponent(isoDate) + '&course_id=' + courseId + '&nb_holes=18&nb_players=' + players +
-    '&affiliation_type_ids%5B%5D=' + affiliationTypeId;
-  var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true, headers: { 'Accept': 'application/json' } });
-  var data = JSON.parse(resp.getContentText());
+function chronogolfTimesRequest_(clubId, isoDate, courseId, affiliationTypeId, players) {
+  return {
+    url: 'https://www.chronogolf.com/marketplace/clubs/' + clubId + '/teetimes?date=' +
+      encodeURIComponent(isoDate) + '&course_id=' + courseId + '&nb_holes=18&nb_players=' + players +
+      '&affiliation_type_ids%5B%5D=' + affiliationTypeId,
+    muteHttpExceptions: true,
+    headers: { 'Accept': 'application/json' }
+  };
+}
+
+function parseChronogolfTimes_(text, players) {
+  var data = JSON.parse(text);
   if (!data || !data.length) return [];
 
   return data
