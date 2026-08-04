@@ -483,6 +483,7 @@
         var venueLink = document.createElement('a');
         venueLink.href = data.event.venueUrl;
         venueLink.target = '_blank';
+        venueLink.rel = 'noopener';
         venueLink.textContent = data.event.venue;
         var venueEl = document.getElementById('event-venue');
         venueEl.textContent = '';

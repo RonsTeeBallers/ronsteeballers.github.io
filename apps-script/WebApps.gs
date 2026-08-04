@@ -177,7 +177,7 @@ function getEventData(eventId, playerSlug) {
       return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
         .setMimeType(ContentService.MimeType.JSON);
     }
-    if (found.row[5] !== 'Open') {
+    if ((found.row[5] || '').toString().trim() !== 'Open') {
       return ContentService.createTextOutput(JSON.stringify({
         error: 'This outing is closed - pairings have already been sent.',
         closed: true
@@ -225,8 +225,7 @@ function getEventData(eventId, playerSlug) {
         greenFee: venue.greenFee,
         cartFee: venue.cartFee,
         total: venue.total,
-        notes: event.notes,
-        signupListUrl: 'https://bit.ly/thursdaygolf'
+        notes: event.notes
       }
     };
 
@@ -319,30 +318,37 @@ function createEvent(params) {
 
     // Block a second outing on a date that already has one. The event date is the
     // unique event ID across V2 (RSVPs, pairings, reminders all key on it), so a
-    // duplicate date would silently collide. params.date is yyyy-MM-dd.
-    var newDateStr = params.date.toString().trim();
-    var existing = sheet.getDataRange().getValues();
-    for (var e = 1; e < existing.length; e++) {
-      if (eventDateStr_(existing[e][0]) === newDateStr) {
-        var pretty = Utilities.formatDate(date, Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy');
-        return ContentService.createTextOutput(JSON.stringify({
-          error: 'An outing is already scheduled for ' + pretty + '. Only one outing per date is allowed - edit or delete the existing event first.',
-          duplicate: true
-        })).setMimeType(ContentService.MimeType.JSON);
+    // duplicate date would silently collide. params.date is yyyy-MM-dd. The lock
+    // covers check-then-append so two organizers can't slip past it together.
+    var lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      var newDateStr = params.date.toString().trim();
+      var existing = sheet.getDataRange().getValues();
+      for (var e = 1; e < existing.length; e++) {
+        if (eventDateStr_(existing[e][0]) === newDateStr) {
+          var pretty = Utilities.formatDate(date, Session.getScriptTimeZone(), 'EEEE, MMMM d, yyyy');
+          return ContentService.createTextOutput(JSON.stringify({
+            error: 'An outing is already scheduled for ' + pretty + '. Only one outing per date is allowed - edit or delete the existing event first.',
+            duplicate: true
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
       }
-    }
 
-    var timeParts = params.time.split(':');
-    var teeTime = new Date(1970, 0, 1, parseInt(timeParts[0]), parseInt(timeParts[1]));
-    sheet.appendRow([
-      date,
-      params.venue || '',
-      teeTime,
-      parseInt(params.slots) || 0,
-      params.mailingList || 'Main Group',
-      'Open',
-      params.notes || ''
-    ]);
+      var timeParts = params.time.split(':');
+      var teeTime = new Date(1970, 0, 1, parseInt(timeParts[0]), parseInt(timeParts[1]));
+      sheet.appendRow([
+        date,
+        params.venue || '',
+        teeTime,
+        parseInt(params.slots) || 0,
+        params.mailingList || 'Main Group',
+        'Open',
+        params.notes || ''
+      ]);
+    } finally {
+      lock.releaseLock();
+    }
     return ContentService.createTextOutput(JSON.stringify({success: true}))
       .setMimeType(ContentService.MimeType.JSON);
   } catch(e) {
@@ -1897,7 +1903,7 @@ function submitRSVP(params) {
     return ContentService.createTextOutput(JSON.stringify({error: 'Event not found'}))
       .setMimeType(ContentService.MimeType.JSON);
   }
-  if (found.row[5] !== 'Open') {
+  if ((found.row[5] || '').toString().trim() !== 'Open') {
     return ContentService.createTextOutput(JSON.stringify({
       error: 'This outing is closed - pairings have already been sent. Contact Ron if your plans changed.',
       closed: true
@@ -1919,6 +1925,16 @@ function submitRSVP(params) {
   }
 
   return writeRsvpRow_(canonical, params);
+}
+
+// Formula-injection guard for free text headed into the sheet from the public
+// RSVP endpoint: setValues interprets a value starting with = as a live formula
+// in the organizer's spreadsheet (and + can be coerced the same way). Prefix the
+// spreadsheet convention for "literal text" so it can never execute. Normal
+// responses are untouched - the UI's own values never start with these.
+function sheetText_(v) {
+  var s = (v || '').toString();
+  return /^[=+]/.test(s) ? "'" + s : s;
 }
 
 // Shared by submitRSVP (player-submitted, playerName trusted from the RSVP link)
@@ -1969,19 +1985,29 @@ function writeRsvpRow_(playerName, params) {
       timestamp,
       playerName || '',
       playerEmail,
-      params.playing || '',
-      params.walkRide || '',
-      params.scoring || '',
-      params.comments || '',
+      sheetText_(params.playing),
+      sheetText_(params.walkRide),
+      sheetText_(params.scoring),
+      sheetText_(params.comments),
       params.eventId || '',
-      playingYes ? guestName : ''
+      playingYes ? sheetText_(guestName) : ''
     ];
 
-    var nextRow = formSheet.getLastRow() + 1;
-    var numCols = row.length;
-    formSheet.getRange(nextRow, 1, 1, numCols).setValues([row]);
-    formSheet.getRange(nextRow, 8).setNumberFormat('@STRING@');
-    formSheet.getRange(nextRow, 8).setValue(params.eventId || '');
+    // Two RSVPs landing in the same instant both compute getLastRow()+1 and the
+    // second silently overwrites the first - and the burst right after an invite
+    // send is exactly when that happens. Serialize the read-row/write-row pair.
+    // waitLock throws on timeout, which the outer catch turns into an error the
+    // page shows, so the player retries instead of losing the response.
+    var lock = LockService.getScriptLock();
+    lock.waitLock(10000);
+    try {
+      var nextRow = formSheet.getLastRow() + 1;
+      formSheet.getRange(nextRow, 1, 1, row.length).setValues([row]);
+      formSheet.getRange(nextRow, 8).setNumberFormat('@STRING@');
+      formSheet.getRange(nextRow, 8).setValue(params.eventId || '');
+    } finally {
+      lock.releaseLock();
+    }
 
     return ContentService.createTextOutput(JSON.stringify({success: true}))
       .setMimeType(ContentService.MimeType.JSON);

@@ -980,7 +980,7 @@ function viewPlayers(idx) {
     var spotWord = (openSpots === 1) ? 'spot' : 'spots';
     document.getElementById('remind-message').value =
       'Quick reminder -- we have ' + openSpots + ' ' + spotWord + ' open for ' + event.venue +
-      '. Tap I\'M IN below to grab a spot. Thanks! -- Ron';
+      '. Tap the RSVP button below to grab a spot. Thanks! -- Ron';
     document.getElementById('remind-audience').value = 'unresponded';
     document.getElementById('remind-details').textContent = event.venue + ' — ' + formatDate(event.id);
     document.getElementById('btn-send-remind').disabled = false;
@@ -1404,7 +1404,7 @@ function viewPlayers(idx) {
       return;
     }
     list.innerHTML = matches.map(function(p) {
-      return '<button type="button" class="imp-player-row" onclick="selectImpPlayer(\'' + p.slug + '\',\'' + esc(p.name.replace(/'/g, "\\'")) + '\')">' +
+      return '<button type="button" class="imp-player-row" onclick="selectImpPlayer(\'' + p.slug + '\',\'' + esc(p.name.replace(/\\/g, '\\\\').replace(/'/g, "\\'")) + '\')">' +
         esc(p.name) + (p.active ? '' : '<span class="inactive-tag">Inactive</span>') + '</button>';
     }).join('');
   }
@@ -1696,16 +1696,16 @@ function viewPlayers(idx) {
     document.getElementById('tt-results').innerHTML = results.map(function(r) {
       var line;
       if (r.status === 'available') {
-        line = '✅ ' + r.course + ' — ' + r.count + ' in a row starting ' + formatTtTime_(r.firstTime);
+        line = '✅ ' + esc(r.course) + ' — ' + r.count + ' in a row starting ' + formatTtTime_(r.firstTime);
       } else if (r.status === 'none') {
-        line = r.course + ' — no open block found';
+        line = esc(r.course) + ' — no open block found';
       } else if (r.status === 'manual') {
-        line = r.course + ' — call to check (not automated yet)';
+        line = esc(r.course) + ' — call to check (not automated yet)';
       } else {
-        line = r.course + ' — could not check';
+        line = esc(r.course) + ' — could not check';
       }
       var link = (r.status === 'available' || r.status === 'manual') && r.bookingUrl
-        ? ' <a href="' + r.bookingUrl + '" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">Open ›</a>'
+        ? ' <a href="' + esc(r.bookingUrl) + '" target="_blank" rel="noopener" style="color:inherit;font-weight:600;">Open ›</a>'
         : '';
       return '<div style="' + styles[r.status] + 'padding:10px 12px;border-radius:8px;margin-bottom:6px;font-size:14px;">' +
         line + link + '</div>';

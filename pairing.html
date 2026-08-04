@@ -430,9 +430,12 @@ function esc(s) {
 }
 
 function cardHTML(p) {
-  var id = 'c_' + p.name.replace(/[^a-z0-9]/gi, '_');
-  var h = '<div class="player-card ' + scoreCls(p.scoring) + '" id="' + id + '" draggable="true" ';
-  h += 'ondragstart="onDragStart(event,\'' + esc(p.name.replace(/\\/g,'\\\\').replace(/'/g,"\\'")) + '\')" ';
+  // Cards are identified by uid (index into players), NOT by name - two guests
+  // with the same name (two hosts bringing the same person) used to collapse
+  // into one identity, leaving the second card permanently unassignable and
+  // Send Pairings disabled with no way out.
+  var h = '<div class="player-card ' + scoreCls(p.scoring) + '" id="c_' + p.uid + '" draggable="true" ';
+  h += 'ondragstart="onDragStart(event,' + p.uid + ')" ';
   h += 'ondragend="onDragEnd(event)">';
   h += '<div class="card-name">' + esc(p.name) + '</div>';
   h += '<div class="card-tags">' + wrTag(p.walkRide) + scoreTag(p.scoring);
@@ -497,22 +500,26 @@ function deleteFoursome(idx) {
   toast('Foursome removed');
 }
 
-function findPlayer(name) {
-  for (var i=0; i<players.length; i++) if (players[i].name===name) return players[i];
+// Used only by draft restore, where the draft stores names: with duplicate
+// names, each drafted mention claims the next still-unassigned card.
+function findUnassignedByName(name) {
+  for (var i=0; i<players.length; i++) {
+    if (players[i].name === name && !players[i].assigned) return players[i];
+  }
   return null;
 }
 
-function removeFromGroups(name) {
+function removeFromGroups(p) {
   groups = groups.map(function(g){
-    return g.filter(function(p){ return p.name !== name; });
+    return g.filter(function(x){ return x !== p; });
   });
 }
 
-function onDragStart(e, name) {
-  dragging = name;
-  e.dataTransfer.setData('text', name);
+function onDragStart(e, uid) {
+  dragging = uid;
+  e.dataTransfer.setData('text', String(uid));
   setTimeout(function(){
-    var el = document.getElementById('c_' + name.replace(/[^a-z0-9]/gi, '_'));
+    var el = document.getElementById('c_' + uid);
     if (el) el.classList.add('dragging');
   }, 0);
 }
@@ -527,13 +534,12 @@ function onDragOver(e) { e.preventDefault(); }
 
 function onDropGroup(e, idx) {
   e.preventDefault();
-  var name = e.dataTransfer.getData('text');
-  if (!name) return;
-  var p = findPlayer(name);
+  var uid = parseInt(e.dataTransfer.getData('text'), 10);
+  var p = isNaN(uid) ? null : players[uid];
   if (!p) return;
   if (groups[idx].length >= 4) { toast('Foursome ' + (idx+1) + ' is full'); return; }
-  if (groups[idx].some(function(x){ return x.name === name; })) return;
-  removeFromGroups(name);
+  if (groups[idx].indexOf(p) !== -1) return;
+  removeFromGroups(p);
   p.assigned = true;
   groups[idx].push(p);
   render();
@@ -541,11 +547,10 @@ function onDropGroup(e, idx) {
 
 function onDropPool(e) {
   e.preventDefault();
-  var name = e.dataTransfer.getData('text');
-  if (!name) return;
-  var p = findPlayer(name);
+  var uid = parseInt(e.dataTransfer.getData('text'), 10);
+  var p = isNaN(uid) ? null : players[uid];
   if (!p) return;
-  removeFromGroups(name);
+  removeFromGroups(p);
   p.assigned = false;
   render();
 }
@@ -690,13 +695,14 @@ function init() {
     if (data.error) {
       document.getElementById('spinner-wrap').innerHTML =
         '<div style="font-size:40px;">&#9888;&#65039;</div>' +
-        '<div style="max-width:300px;text-align:center;">' + data.error + '</div>' +
+        '<div style="max-width:300px;text-align:center;">' + esc(data.error) + '</div>' +
         '<button onclick="window.location.reload()" style="padding:10px 18px;border:2px solid #1a5276;border-radius:8px;background:white;color:#1a5276;font-weight:700;cursor:pointer;">Retry</button>';
       return;
     }
 
-    players = (data.confirmed || []).map(function(p) {
+    players = (data.confirmed || []).map(function(p, i) {
       return {
+        uid: i,   // stable card identity - names can collide (duplicate guests)
         name: p.name,
         walkRide: p.walkRide || 'No preference',
         scoring: p.scoring || 'No Preference',
@@ -722,12 +728,12 @@ function init() {
             fsStr.split(',').forEach(function(playerStr) {
               var name = playerStr.split('|')[0];
               if (!name) return;
-              var p = findPlayer(name);
-              if (p && !p.assigned) {
+              var p = findUnassignedByName(name);
+              if (p) {
                 p.assigned = true;
                 grp.push(p);
                 restored++;
-              } else if (!p) {
+              } else if (!players.some(function(x){ return x.name === name; })) {
                 dropped.push(name);
               }
             });
