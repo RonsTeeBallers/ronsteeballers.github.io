@@ -201,7 +201,7 @@
 
 <div id="loading" class="loading event-card" style="margin:16px;">
   <div class="spinner"></div>
-  Loading event details...
+  <span id="loading-text">Loading event details...</span>
 </div>
 
 <div id="app" class="hidden">
@@ -349,7 +349,7 @@
     }
     var timer = setTimeout(function() {
       finish({ error: 'No response from the server. Check your connection and try again.' });
-    }, timeoutMs || 15000);
+    }, timeoutMs || 60000);
     window[fnName] = finish;
     s.onerror = function() { finish({ error: 'Could not reach the server. Check your connection and try again.' }); };
     s.src = url;
@@ -454,7 +454,15 @@
     eventId = p.event;
     var playerSlug = p.player;
 
+    // The backend sleeps between outings, so the first hit of the day pays an
+    // Apps Script cold start. Reassure rather than look broken while it wakes.
+    var slowTimer = setTimeout(function() {
+      var lt = document.getElementById('loading-text');
+      if (lt) lt.textContent = 'Still loading - the server is waking up. Please hang on.';
+    }, 8000);
+
     jsonpCall('getEvent', {eventId: eventId, player: playerSlug}, function(data) {
+      clearTimeout(slowTimer);
       if (data.error) {
         var loading = document.getElementById('loading');
         loading.classList.remove('hidden');

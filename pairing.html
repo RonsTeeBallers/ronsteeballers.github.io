@@ -376,7 +376,7 @@ function jsonp(action, params, cb, timeoutMs) {
   }
   var timer = setTimeout(function() {
     finish({ error: 'Still waiting on the server — it may have finished anyway. Check before trying again, so you do not do it twice. If nothing happened, check your connection and retry.' });
-  }, timeoutMs || 15000);
+  }, timeoutMs || 60000);
   window[fn] = finish;
   s.onerror = function() { finish({ error: 'Could not reach the server (blocked or network error). Please try again.' }); };
   s.src = url;

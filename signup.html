@@ -265,7 +265,7 @@
     document.body.appendChild(script);
     setTimeout(function() {
       if (seq === loadSeq) handlePlayersResponse({ error: 'timeout' });
-    }, 15000);
+    }, 60000);   // Apps Script cold start can far exceed the old 15s
   }
 
   function handlePlayersResponse(data) {
