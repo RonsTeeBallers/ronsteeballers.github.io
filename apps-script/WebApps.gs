@@ -1993,6 +1993,16 @@ function writeRsvpRow_(playerName, params) {
       playingYes ? sheetText_(guestName) : ''
     ];
 
+    // Replay guard: the submit arrives as a GET, which browsers and
+    // intermediaries may silently re-issue after a connection failure - each
+    // replay of one click used to append another row. The RSVP page sends a
+    // fresh random token per click; a token already in the cache means this
+    // exact request was written once, so acknowledge success without writing
+    // again. Checked inside the lock so two copies of the same replay can't
+    // both pass the test. No token (older page, organizer tool) writes as before.
+    var submitToken = (params.submitToken || '').toString().trim();
+    var cache = CacheService.getScriptCache();
+
     // Two RSVPs landing in the same instant both compute getLastRow()+1 and the
     // second silently overwrites the first - and the burst right after an invite
     // send is exactly when that happens. Serialize the read-row/write-row pair.
@@ -2001,10 +2011,15 @@ function writeRsvpRow_(playerName, params) {
     var lock = LockService.getScriptLock();
     lock.waitLock(10000);
     try {
+      if (submitToken && cache.get('rsvpTok_' + submitToken)) {
+        return ContentService.createTextOutput(JSON.stringify({success: true, duplicate: true}))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
       var nextRow = formSheet.getLastRow() + 1;
       formSheet.getRange(nextRow, 1, 1, row.length).setValues([row]);
       formSheet.getRange(nextRow, 8).setNumberFormat('@STRING@');
       formSheet.getRange(nextRow, 8).setValue(params.eventId || '');
+      if (submitToken) cache.put('rsvpTok_' + submitToken, '1', 600);
     } finally {
       lock.releaseLock();
     }

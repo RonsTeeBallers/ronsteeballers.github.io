@@ -422,9 +422,16 @@
     var walkRideMap = { walk: 'Walk', ride: 'Ride', nopref: 'No preference', '': '' };
     var scoringMap = { ownball: 'Own Ball', scramble: 'Scramble', nopref: 'No Preference', '': '' };
 
+    // Fresh random token per click: the submit travels as a JSONP GET, which
+    // the network layer may silently re-issue after a connection hiccup. The
+    // server remembers tokens it has written and ignores replays, so one click
+    // can never become several Form Responses rows.
+    var submitToken = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+
     jsonpCall('submitRSVP', {
       eventId: eventId,
       playerName: playerName,
+      submitToken: submitToken,
       playing: playingChoice === 'yes' ? 'Yes' : 'No',
       walkRide: walkRideMap[walkRideChoice] || '',
       scoring: scoringMap[scoringChoice] || '',
@@ -447,7 +454,8 @@
         document.getElementById('confirmation-yes').classList.add('hidden');
         document.getElementById('confirmation-no').classList.remove('hidden');
       }
-    }, 30000);
+    }, 60000);  // sheet write + Apps Script cold start can exceed 30s - a short
+                // timeout here showed "server error" while the row still landed
   }
   function init() {
     var p = getParams();
