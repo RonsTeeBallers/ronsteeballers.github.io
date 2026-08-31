@@ -1484,9 +1484,12 @@ function viewPlayers(idx) {
     btn.disabled = true;
     btn.textContent = 'Submitting...';
 
+    // Same replay guard as the RSVP page: fresh token per click, the server
+    // ignores replays it has already written (writeRsvpRow_ is shared).
     jsonpCall('organizerSubmitRSVP', {
       playerSlug: impSelectedPlayer.slug,
       eventId: eventId,
+      submitToken: Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10),
       playing: impPlaying,
       walkRide: impWalkRide,
       scoring: impScoring,
