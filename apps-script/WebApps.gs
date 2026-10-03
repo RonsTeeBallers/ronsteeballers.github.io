@@ -442,6 +442,7 @@ function savePairingDraft(params) {
     }
     var draft = {
       foursomes: params.foursomes || '',
+      waitlist: params.waitlist || '',
       comment: params.comment || '',
       savedAt: new Date().toISOString()
     };
@@ -541,6 +542,7 @@ function savePairings(params) {
         return { name: parts[0], walkRide: parts[1] || 'No preference' };
       });
     });
+    var waitlist = parseWaitlist_(params.waitlist);
     var eventId = params.eventId;
 
     // Get event details
@@ -615,10 +617,20 @@ function savePairings(params) {
       row++;
     });
 
+    if (waitlist.length > 0) {
+      draftSheet.getRange(row, 1).setValue('Waitlist').setFontWeight('bold');
+      row++;
+      waitlist.forEach(function(player) {
+        draftSheet.getRange(row, 1).setValue('   ' + player.name + ' (' + player.walkRide + ')')
+          .setFontWeight('normal');
+        row++;
+      });
+    }
+
     // Build email body (shared with previewPairings)
     var htmlBody = buildPairingsEmailHtml_({
       formattedDate: formattedDate, venueName: venueName,
-      foursomes: foursomes, startMinutes: startMinutes,
+      foursomes: foursomes, waitlist: waitlist, startMinutes: startMinutes,
       teeTimeInterval: teeTimeInterval, comment: params.comment || ''
     });
 
@@ -641,7 +653,8 @@ function savePairings(params) {
     var recipients = [];
     var seenEmails = {};
     var unmatched = [];
-    foursomes.forEach(function(foursome) {
+    // Waitlisted players get the same email as the foursomes.
+    foursomes.concat([waitlist]).forEach(function(foursome) {
       foursome.forEach(function(player) {
         var lookup = player.name.toLowerCase().trim();
         var match = emailByName[lookup];
@@ -689,6 +702,7 @@ function savePairings(params) {
     // adjustments and a resend; closeEvent clears the draft.
     PropertiesService.getScriptProperties().setProperty('PAIRING_DRAFT_' + eventId, JSON.stringify({
       foursomes: params.foursomes,
+      waitlist: params.waitlist || '',
       comment: params.comment || '',
       savedAt: new Date().toISOString()
     }));
@@ -708,9 +722,18 @@ function savePairings(params) {
 
 }
 
+// Parse the pairing page's "Name|WalkRide,Name|WalkRide" waitlist string
+// (same player format as a foursome, no ';' groups) into [{name, walkRide}].
+function parseWaitlist_(str) {
+  return (str || '').toString().split(',').map(function(playerStr) {
+    var parts = playerStr.split('|');
+    return { name: (parts[0] || '').trim(), walkRide: parts[1] || 'No preference' };
+  }).filter(function(p) { return p.name !== ''; });
+}
+
 // Build the pairings email HTML. Shared by savePairings (real send) and
 // previewPairings (no-send preview) so they never drift apart.
-// o = { formattedDate, venueName, foursomes, startMinutes, teeTimeInterval, comment }
+// o = { formattedDate, venueName, foursomes, waitlist, startMinutes, teeTimeInterval, comment }
 function buildPairingsEmailHtml_(o) {
   // One styled block per foursome, matching the invite's card look.
   var foursomeBlocks = o.foursomes.map(function(foursome, idx) {
@@ -734,6 +757,19 @@ function buildPairingsEmailHtml_(o) {
       '</div>';
   }).join('');
 
+  // Waitlist follows the last foursome: same card style, orange heading, no
+  // tee time. Only rendered when someone is on it.
+  var waitlistBlock = '';
+  if (o.waitlist && o.waitlist.length > 0) {
+    waitlistBlock = '<div style="background:#fdf2e9;padding:14px 16px;border-radius:8px;margin:0 0 12px;">' +
+      '<p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#d35400;">&#9203; Waitlist</p>' +
+      o.waitlist.map(function(player) {
+        return '<p style="margin:4px 0;font-size:15px;color:#1a2332;">' +
+          escapeHtml_(player.name) + ' <span style="color:#5d6d7e;font-size:13px;">(' + escapeHtml_(player.walkRide) + ')</span></p>';
+      }).join('') +
+      '</div>';
+  }
+
   var commentSection = o.comment
     ? '<p style="background:#eaf2ff;padding:12px;border-radius:8px;border-left:3px solid #1a5276;color:#1a2332;font-size:15px;line-height:1.5;">' + o.comment + '</p>'
     : '';
@@ -749,6 +785,7 @@ function buildPairingsEmailHtml_(o) {
     '<p style="color:#5d6d7e;">Here are the pairings for ' + o.formattedDate + ' at ' + o.venueName + ':</p>' +
     commentSection +
     foursomeBlocks +
+    waitlistBlock +
     '<p style="color:#5d6d7e;font-size:14px;">Tee times reserved under the name Ron Blanton.</p>' +
     '</div>' +
     '<div style="background:#f0f4f8;padding:12px;border-radius:0 0 12px 12px;text-align:center;">' +
@@ -777,6 +814,8 @@ function previewPairings(params) {
         return { name: parts[0], walkRide: parts[1] || 'No preference' };
       });
     });
+
+    var waitlist = parseWaitlist_(params.waitlist);
 
     // Find the event row
     var found = findEventRow_(eventId);
@@ -821,7 +860,7 @@ function previewPairings(params) {
 
     var htmlBody = buildPairingsEmailHtml_({
       formattedDate: formattedDate, venueName: venueName,
-      foursomes: foursomes, startMinutes: startMinutes,
+      foursomes: foursomes, waitlist: waitlist, startMinutes: startMinutes,
       teeTimeInterval: teeTimeInterval, comment: params.comment || ''
     });
 
@@ -838,7 +877,7 @@ function previewPairings(params) {
     var seen = {};
     var count = 0;
     var unmatched = [];
-    foursomes.forEach(function(foursome) {
+    foursomes.concat([waitlist]).forEach(function(foursome) {
       foursome.forEach(function(player) {
         var lookup = player.name.toLowerCase().trim();
         if (emailByName[lookup]) {
