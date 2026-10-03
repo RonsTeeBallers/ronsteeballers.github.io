@@ -140,6 +140,7 @@
       font-weight: 700;
     }
     .fs-count.full { background: #1e8449; }
+    .waitlist-hdr { background: #d35400; }
     .foursome-body { padding: 8px; min-height: 50px; }
     .drop-hint {
       border: 2px dashed #d0d8e4;
@@ -295,6 +296,8 @@ var BACKEND = 'https://script.google.com/macros/s/AKfycbxTDDH0nhMzS4YycZImyXV6w_
 var eventId = '';
 var players = [];
 var groups = [];
+var slotCap = 0;     // tee-time slots reserved x4 (0 = unknown)
+var waitlist = [];   // players on the waitlist (no size limit); they still get the pairing email
 var startMin = 660;
 var interval = 9;
 var dragging = null;
@@ -478,6 +481,25 @@ function render() {
     }
     html += '</div></div>';
   });
+
+  // Waitlist section follows the last foursome: same block style, orange
+  // header, no tee time and no size limit. Shown only when the event is
+  // oversubscribed (more confirmed than reserved slots) or someone is already
+  // on it (e.g. restored from a draft); otherwise it is hidden entirely.
+  if (waitlist.length > 0 || (slotCap > 0 && players.length > slotCap)) {
+  html += '<div class="foursome-block">';
+  html += '<div class="foursome-hdr waitlist-hdr">';
+  html += '<span class="fs-title">Waitlist</span>';
+  html += '<span class="fs-count">' + waitlist.length + '</span>';
+  html += '</div>';
+  html += '<div class="foursome-body" ondragover="onDragOver(event)" ondrop="onDropWaitlist(event)">';
+  html += waitlist.map(cardHTML).join('');
+  html += '<div class="drop-hint" ';
+  html += 'ondragover="onDragOver(event);this.classList.add(\'over\')" ';
+  html += 'ondragleave="this.classList.remove(\'over\')" ';
+  html += 'ondrop="onDropWaitlist(event)">Drop waitlisted player here</div>';
+  html += '</div></div>';
+  }
   fsDiv.innerHTML = html;
 
   var un = unassigned.length;
@@ -513,6 +535,7 @@ function removeFromGroups(p) {
   groups = groups.map(function(g){
     return g.filter(function(x){ return x !== p; });
   });
+  waitlist = waitlist.filter(function(x){ return x !== p; });
 }
 
 function onDragStart(e, uid) {
@@ -545,6 +568,18 @@ function onDropGroup(e, idx) {
   render();
 }
 
+function onDropWaitlist(e) {
+  e.preventDefault();
+  var uid = parseInt(e.dataTransfer.getData('text'), 10);
+  var p = isNaN(uid) ? null : players[uid];
+  if (!p) return;
+  if (waitlist.indexOf(p) !== -1) return;
+  removeFromGroups(p);
+  p.assigned = true;
+  waitlist.push(p);
+  render();
+}
+
 function onDropPool(e) {
   e.preventDefault();
   var uid = parseInt(e.dataTransfer.getData('text'), 10);
@@ -556,6 +591,7 @@ function onDropPool(e) {
 }
 
 var pendingFoursomes = '';
+var pendingWaitlist = '';
 
 // Same "Name|WR,Name|WR;..." format savePairings expects. Used for both the
 // real send and draft saves (drafts may have empty or partial foursomes).
@@ -565,6 +601,13 @@ function serializeGroups() {
       return p.name + '|' + p.walkRide;
     }).join(',');
   }).join(';');
+}
+
+// Waitlist in the same "Name|WR,Name|WR" player format (no ';' groups).
+function serializeWaitlist() {
+  return waitlist.map(function(p) {
+    return p.name + '|' + p.walkRide;
+  }).join(',');
 }
 
 // Save the current groupings as a draft - nothing is emailed and the event
@@ -577,6 +620,7 @@ function saveDraft() {
   jsonp('savePairingDraft', {
     eventId: eventId,
     foursomes: serializeGroups(),
+    waitlist: serializeWaitlist(),
     comment: document.getElementById('pairing-comment').value
   }, function(data) {
     btn.disabled = false;
@@ -614,6 +658,7 @@ function sendPairings() {
   if (unassigned.length > 0) { toast('All players must be assigned first'); return; }
 
   pendingFoursomes = serializeGroups();
+  pendingWaitlist = serializeWaitlist();
 
   document.getElementById('pairing-modal-details').textContent =
     document.getElementById('hdr-venue').textContent + ' — ' + document.getElementById('hdr-date').textContent;
@@ -631,6 +676,7 @@ function loadPairingPreview() {
   jsonp('previewPairings', {
     eventId: eventId,
     foursomes: pendingFoursomes,
+    waitlist: pendingWaitlist,
     comment: document.getElementById('pairing-comment').value
   }, function(data) {
     if (data && data.success) {
@@ -659,6 +705,7 @@ function confirmSendPairings() {
   jsonp('savePairings', {
     eventId: eventId,
     foursomes: pendingFoursomes,
+    waitlist: pendingWaitlist,
     comment: document.getElementById('pairing-comment').value
   }, function(data) {
     if (data.success) {
@@ -700,6 +747,7 @@ function init() {
       return;
     }
 
+    slotCap = data.slots || 0;
     players = (data.confirmed || []).map(function(p, i) {
       return {
         uid: i,   // stable card identity - names can collide (duplicate guests)
@@ -740,12 +788,29 @@ function init() {
           }
           groups.push(grp);
         });
+        if (draft.waitlist) {
+          draft.waitlist.split(',').forEach(function(playerStr) {
+            var name = playerStr.split('|')[0];
+            if (!name) return;
+            var p = findUnassignedByName(name);
+            if (p) {
+              p.assigned = true;
+              waitlist.push(p);
+              restored++;
+            } else if (!players.some(function(x){ return x.name === name; })) {
+              dropped.push(name);
+            }
+          });
+        }
         if (draft.comment) document.getElementById('pairing-comment').value = draft.comment;
       }
 
-      // Make sure there is a slot for everyone (covers the no-draft case and
-      // players who RSVPed after the draft was saved).
-      while (groups.length * 4 < players.length) groups.push([]);
+      // Make sure there is a slot for everyone not on the waitlist (covers the
+      // no-draft case and players who RSVPed after the draft was saved).
+      // When oversubscribed, only reserved slots get foursomes; the rest is waitlist.
+      var needed = players.length - waitlist.length;
+      if (slotCap > 0 && needed > slotCap) needed = slotCap;
+      while (groups.length * 4 < needed) groups.push([]);
       if (groups.length === 0) groups.push([]);
 
       document.getElementById('spinner-wrap').style.display = 'none';
