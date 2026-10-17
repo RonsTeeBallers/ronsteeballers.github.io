@@ -1604,6 +1604,61 @@ function getEventInfo(eventId) {
       .setMimeType(ContentService.MimeType.JSON);
   }
 }
+// ---- Weather forecast for the invite -------------------------------------
+// Course location = Courses cols B-E joined; geocoded once (cached), forecast from
+// Open-Meteo (free, no key; reaches ~16 days out). Returns '' on ANY failure or when
+// the event date is outside the forecast window, so a weather hiccup never blocks an invite.
+function geocodeCourse_(address) {
+  if (!address) return null;
+  var cache = CacheService.getScriptCache();
+  var key = 'geo_' + Utilities.base64EncodeWebSafe(Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, address));
+  var hit = cache.get(key);
+  if (hit) return JSON.parse(hit);
+  var res = Maps.newGeocoder().geocode(address);
+  if (!res || res.status !== 'OK' || !res.results.length) return null;
+  var loc = res.results[0].geometry.location;
+  var out = { lat: loc.lat, lng: loc.lng };
+  cache.put(key, JSON.stringify(out), 21600);
+  return out;
+}
+
+function weatherIcon_(code) {
+  if (code === 0 || code === 1) return '&#9728;&#65039;';          // sunny
+  if (code === 2) return '&#9925;';                                 // partly cloudy
+  if (code === 3) return '&#9729;&#65039;';                         // cloudy
+  if (code === 45 || code === 48) return '&#127787;&#65039;';       // fog
+  if (code >= 95) return '&#9928;&#65039;';                         // thunderstorm
+  if ((code >= 71 && code <= 77) || code === 85 || code === 86) return '&#10052;&#65039;'; // snow
+  return '&#127783;&#65039;';                                       // drizzle / rain / showers
+}
+
+function buildForecastHtml_(address, eventDate) {
+  try {
+    if (!(eventDate instanceof Date)) return '';
+    var tz = Session.getScriptTimeZone();
+    var day = Utilities.formatDate(eventDate, tz, 'yyyy-MM-dd');
+    var geo = geocodeCourse_(address);
+    if (!geo) return '';
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + geo.lat + '&longitude=' + geo.lng +
+      '&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_probability_max' +
+      '&temperature_unit=fahrenheit&timezone=auto&start_date=' + day + '&end_date=' + day;
+    var resp = UrlFetchApp.fetch(url, { muteHttpExceptions: true });
+    if (resp.getResponseCode() !== 200) return '';
+    var d = JSON.parse(resp.getContentText()).daily;
+    if (!d || !d.time || !d.time.length || d.temperature_2m_max[0] == null) return '';
+    var hi = Math.round(d.temperature_2m_max[0]);
+    var lo = Math.round(d.temperature_2m_min[0]);
+    var rain = d.precipitation_probability_max ? d.precipitation_probability_max[0] : null;
+    var made = Utilities.formatDate(new Date(), tz, 'M/d');
+    var text = '&#127780;&#65039; Forecast as of ' + made + ': ' + weatherIcon_(d.weathercode[0]) +
+      ' L: ' + lo + '&deg; H: ' + hi + '&deg;';
+    if (rain != null) text += ' % rain: ' + rain + '%';
+    return '<p style="margin:4px 0;font-size:14px;color:#1a2332;">' + text + '</p>';
+  } catch (e) {
+    return '';
+  }
+}
+
 // Builds the exact invite email HTML. Used by both the live send and the preview
 // so the organizer's preview is identical to what recipients receive.
 function buildInviteEmailHtml_(o) {
@@ -1639,6 +1694,7 @@ function buildInviteEmailHtml_(o) {
     '<p style="margin:4px 0;font-size:16px;font-weight:700;color:#1a2332;">&#128197; ' + o.formattedDate + '</p>' +
     '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#128205; ' + venueLink + '</p>' +
     '<p style="margin:4px 0;font-size:16px;color:#1a2332;">&#9200; ' + o.timeStr + ' (first tee time)</p>' +
+    (o.forecastHtml || '') +
     '<p style="margin:4px 0;font-size:14px;color:#5d6d7e;">' + o.slotsReserved + ' tee times reserved under the name Ron Blanton</p>' +
     '</div>';
   // One button, not two. The old I'M IN / I'M OUT pair duplicated the buttons on
@@ -1780,7 +1836,7 @@ function previewInvite(params) {
       : eventRow[0].toString();
 
     var coursesData = coursesSheet.getDataRange().getValues();
-    var greenFee = '', cartFee = '', total = '', venueUrl = '', courseNotes = '';
+    var greenFee = '', cartFee = '', total = '', venueUrl = '', courseNotes = '', courseAddress = '';
     for (var c = 1; c < coursesData.length; c++) {
       if (coursesData[c][0].toString() === venueName) {
         var green = parseFloat(coursesData[c][7]) || 0;
@@ -1790,6 +1846,8 @@ function previewInvite(params) {
         total = (green + cart) > 0 ? '$' + (green + cart).toFixed(2) : '';
         venueUrl = coursesData[c][6] ? coursesData[c][6].toString() : '';
         courseNotes = coursesData[c][11] ? coursesData[c][11].toString() : '';  // col L Course Notes
+        courseAddress = [1, 2, 3, 4].map(function(i) { return coursesData[c][i] ? coursesData[c][i].toString().trim() : ''; })
+          .filter(String).join(', ');  // cols B-E location
         break;
       }
     }
@@ -1800,8 +1858,10 @@ function previewInvite(params) {
     var sampleName = count ? (recipients[0].firstName || 'Friend') : 'Friend';
     var sampleSlug = count ? recipients[0].slug : 'sample-player';
 
+    var forecastHtml = buildForecastHtml_(courseAddress, eventRow[0]);
     var baseUrl = 'https://ronsteeballers.github.io';
     var html = buildInviteEmailHtml_({
+      forecastHtml: forecastHtml,
       firstName: sampleName,
       formattedDate: formattedDate, venueName: venueName, venueUrl: venueUrl,
       timeStr: timeStr, slotsReserved: slotsReserved,
@@ -1867,6 +1927,7 @@ function sendInviteEmails(params) {
     var total = '';
     var venueUrl = '';
     var courseNotes = '';
+    var courseAddress = '';
     for (var c = 1; c < coursesData.length; c++) {
       if (coursesData[c][0].toString() === venueName) {
         var green = parseFloat(coursesData[c][7]) || 0;
@@ -1876,6 +1937,8 @@ function sendInviteEmails(params) {
         total = (green + cart) > 0 ? '$' + (green + cart).toFixed(2) : '';
         venueUrl = coursesData[c][6] ? coursesData[c][6].toString() : '';
         courseNotes = coursesData[c][11] ? coursesData[c][11].toString() : '';  // col L Course Notes
+        courseAddress = [1, 2, 3, 4].map(function(i) { return coursesData[c][i] ? coursesData[c][i].toString().trim() : ''; })
+          .filter(String).join(', ');  // cols B-E location
         break;
       }
     }
@@ -1893,12 +1956,14 @@ function sendInviteEmails(params) {
     var sent = 0;
     var errors = [];
     var signedUpNames = remindOnly ? getSignedUpNames_(eventId) : [];
+    var forecastHtml = buildForecastHtml_(courseAddress, eventRow[0]);
 
     // Send personalized email to each recipient
     recipients.forEach(function(recipient) {
       var rsvpUrl = baseUrl + '/rsvp.html?event=' + eventId + '&player=' + recipient.slug;
 
       var htmlBody = buildInviteEmailHtml_({
+        forecastHtml: forecastHtml,
         firstName: recipient.firstName,
         formattedDate: formattedDate, venueName: venueName, venueUrl: venueUrl,
         timeStr: timeStr, slotsReserved: slotsReserved,
