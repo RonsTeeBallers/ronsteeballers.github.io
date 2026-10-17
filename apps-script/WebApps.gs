@@ -1605,7 +1605,7 @@ function getEventInfo(eventId) {
   }
 }
 // ---- Weather forecast for the invite -------------------------------------
-// Course location = Courses cols B-E joined; geocoded once (cached), forecast from
+// Course location = Courses cols C-E (city, state, zip) joined; geocoded once (cached), forecast from
 // Open-Meteo (free, no key; reaches ~16 days out). Returns '' on ANY failure or when
 // the event date is outside the forecast window, so a weather hiccup never blocks an invite.
 function geocodeCourse_(address) {
@@ -1846,8 +1846,8 @@ function previewInvite(params) {
         total = (green + cart) > 0 ? '$' + (green + cart).toFixed(2) : '';
         venueUrl = coursesData[c][6] ? coursesData[c][6].toString() : '';
         courseNotes = coursesData[c][11] ? coursesData[c][11].toString() : '';  // col L Course Notes
-        courseAddress = [1, 2, 3, 4].map(function(i) { return coursesData[c][i] ? coursesData[c][i].toString().trim() : ''; })
-          .filter(String).join(', ');  // cols B-E location
+        courseAddress = [2, 3, 4].map(function(i) { return coursesData[c][i] ? coursesData[c][i].toString().trim() : ''; })
+          .filter(String).join(', ');  // cols C-E city/state/zip
         break;
       }
     }
@@ -1937,8 +1937,8 @@ function sendInviteEmails(params) {
         total = (green + cart) > 0 ? '$' + (green + cart).toFixed(2) : '';
         venueUrl = coursesData[c][6] ? coursesData[c][6].toString() : '';
         courseNotes = coursesData[c][11] ? coursesData[c][11].toString() : '';  // col L Course Notes
-        courseAddress = [1, 2, 3, 4].map(function(i) { return coursesData[c][i] ? coursesData[c][i].toString().trim() : ''; })
-          .filter(String).join(', ');  // cols B-E location
+        courseAddress = [2, 3, 4].map(function(i) { return coursesData[c][i] ? coursesData[c][i].toString().trim() : ''; })
+          .filter(String).join(', ');  // cols C-E city/state/zip
         break;
       }
     }
